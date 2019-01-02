@@ -7,3 +7,6 @@
 [submodule "third/blackwidow"]
 	path = third/blackwidow
 	url = https://github.com/shannondb/blackwidow.git
+[submodule "third/kv_libc++"]
+	path = third/kv_libc++
+	url = https://github.com/shannondb/kv_libcpp.git
