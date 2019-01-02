@@ -1,0 +1,95 @@
+#ifndef __VENICE_IOCTL__
+#define __VENICE_IOCTL__
+
+#ifdef __KERNEL__
+#include <linux/kernel.h>
+#include <linux/ioctl.h>
+#else /* __KERNEL__ */
+#include <stdio.h>
+#include <sys/ioctl.h>
+#endif /* __KERNEL__ */
+
+#include <linux/types.h>
+#include <linux/ioctl.h>
+#include <linux/version.h>
+#include "venice_macro.h"
+#include "venice_kv.h"
+
+enum {
+	GET_KV_CMD = 0x13,
+	PUT_KV_CMD,
+	DEL_KV_CMD,
+	KV_STATUS_CMD,
+	CREATE_SNAPSHOT_CMD,
+	RELEASE_SNAPSHOT_CMD,
+	SET_CACHE_CMD,
+	SNAPSHOT_LIST_CMD,
+	WRITE_BATCH_CMD,
+	CREATE_DATABASE_CMD,
+	REMOVE_DATABASE_CMD,
+	OPEN_DATABASE_CMD,
+	LIST_DATABASE_CMD,
+	CREATE_ITERATOR_CMD,
+	DESTROY_ITERATOR_CMD,
+	ITERATOR_SEEK_CMD,
+	ITERATOR_MOVE_CMD,
+	ITERATOR_GET_CMD,
+	DB_STATUS_CMD,
+	CREATE_CF_CMD,
+	REMOVE_CF_CMD,
+	OPEN_CF_CMD,
+	LIST_CF_CMD,
+	READ_BATCH_CMD,
+	CREATE_CHECKPOINT_CMD,
+	RELEASE_CHECKPOINT_CMD,
+	CHECKPOINT_LIST_CMD,
+	WRITE_BATCH_NONATOMIC_CMD,
+};
+
+
+#define VENICE_KV_IOCTL_FLAGS	'K'
+
+#define GET_KV		_IOWR(VENICE_KV_IOCTL_FLAGS, GET_KV_CMD, \
+				struct venice_kv)
+#define PUT_KV		_IOWR(VENICE_KV_IOCTL_FLAGS, PUT_KV_CMD, \
+				struct venice_kv)
+#define DEL_KV		_IOWR(VENICE_KV_IOCTL_FLAGS, DEL_KV_CMD, \
+				struct venice_kv)
+#define KV_STATUS	_IOWR(VENICE_KV_IOCTL_FLAGS, KV_STATUS_CMD, \
+				struct kv_dev_status)
+#define CREATE_CHECKPOINT		_IOWR(VENICE_KV_IOCTL_FLAGS, CREATE_CHECKPOINT_CMD, \
+				struct uapi_checkpoint)
+#define RELEASE_CHECKPOINT	_IOWR(VENICE_KV_IOCTL_FLAGS, RELEASE_CHECKPOINT_CMD, \
+				struct uapi_checkpoint)
+#define CHECKPOINT_LIST	_IOWR(VENICE_KV_IOCTL_FLAGS, CHECKPOINT_LIST_CMD,	\
+				struct uapi_checkpoint_list)
+#define CREATE_SNAPSHOT		_IOWR(VENICE_KV_IOCTL_FLAGS, CREATE_SNAPSHOT_CMD, \
+				struct uapi_snapshot)
+#define RELEASE_SNAPSHOT	_IOWR(VENICE_KV_IOCTL_FLAGS, RELEASE_SNAPSHOT_CMD, \
+				struct uapi_snapshot)
+#define SNAPSHOT_LIST	_IOWR(VENICE_KV_IOCTL_FLAGS, SNAPSHOT_LIST_CMD,	\
+				struct uapi_snapshot_list)
+#define SET_CACHE	_IOWR(VENICE_KV_IOCTL_FLAGS, SET_CACHE_CMD, struct kv_cache_size)
+#define WRITE_BATCH	_IOWR(VENICE_KV_IOCTL_FLAGS, WRITE_BATCH_CMD, struct write_batch_header)
+#define WRITE_BATCH_NONATOMIC	_IOWR(VENICE_KV_IOCTL_FLAGS, WRITE_BATCH_NONATOMIC_CMD, \
+				struct write_batch_header)
+#define READ_BATCH	_IOWR(VENICE_KV_IOCTL_FLAGS, READ_BATCH_CMD, struct read_batch_header)
+
+#define CREATE_DATABASE _IOWR(VENICE_KV_IOCTL_FLAGS, CREATE_DATABASE_CMD, struct kvdb_handle)
+#define REMOVE_DATABASE _IOWR(VENICE_KV_IOCTL_FLAGS, REMOVE_DATABASE_CMD, struct kvdb_handle)
+#define OPEN_DATABASE   _IOWR(VENICE_KV_IOCTL_FLAGS, OPEN_DATABASE_CMD, struct kvdb_handle)
+#define LIST_DATABASE   _IOWR(VENICE_KV_IOCTL_FLAGS, LIST_DATABASE_CMD, struct kvdb_list)
+
+#define CREATE_COLUMNFAMILY _IOWR(VENICE_KV_IOCTL_FLAGS, CREATE_CF_CMD, struct cf_handle)
+#define REMOVE_COLUMNFAMILY _IOWR(VENICE_KV_IOCTL_FLAGS, REMOVE_CF_CMD, struct cf_handle)
+#define OPEN_COLUMNFAMILY   _IOWR(VENICE_KV_IOCTL_FLAGS, OPEN_CF_CMD, struct cf_handle)
+#define LIST_COLUMNFAMILY   _IOWR(VENICE_KV_IOCTL_FLAGS, LIST_CF_CMD, struct cf_list)
+
+#define IOCTL_CREATE_ITERATOR  _IOWR(VENICE_KV_IOCTL_FLAGS, CREATE_ITERATOR_CMD, struct kvdb_iterator)
+#define IOCTL_DESTROY_ITERATOR _IOWR(VENICE_KV_IOCTL_FLAGS, DESTROY_ITERATOR_CMD, struct cf_iterator)
+#define IOCTL_ITERATOR_SEEK    _IOWR(VENICE_KV_IOCTL_FLAGS, ITERATOR_SEEK_CMD, struct kvdb_iter_seek_option)
+#define IOCTL_ITERATOR_MOVE    _IOWR(VENICE_KV_IOCTL_FLAGS, ITERATOR_MOVE_CMD, struct kvdb_iter_move_option)
+#define IOCTL_ITERATOR_GET     _IOWR(VENICE_KV_IOCTL_FLAGS, ITERATOR_GET_CMD, struct kvdb_iter_get_option)
+
+#define IOCTL_DB_STATUS        _IOWR(VENICE_KV_IOCTL_FLAGS, DB_STATUS_CMD, struct kv_db_status)
+#endif /* end of __VENICE_IOCTL__ */
