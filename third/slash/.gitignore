@@ -1,0 +1,47 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+tags
+lib/
+slash/src/build_version.cc
+*.d
+
+# examples
+binlog_example
+cond_lock_example
+conf_example
+hash_example
+mutex_example
+
+# tests
+base_conf_test
+slash_binlog_test
+slash_coding_test
+slash_env_test
+slash_string_test
