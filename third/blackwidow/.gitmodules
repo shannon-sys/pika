@@ -1,9 +1,0 @@
-[submodule "deps/rocksdb"]
-  path = deps/rocksdb
-  url = https://github.com/facebook/rocksdb.git
-[submodule "deps/googletest"]
-  path = deps/googletest
-  url = https://github.com/google/googletest.git
-[submodule "deps/slash"]
-	path = deps/slash
-	url = https://github.com/Qihoo360/slash.git
