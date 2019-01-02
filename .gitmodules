@@ -4,3 +4,6 @@
 [submodule "third/slash"]
 	path = third/slash
 	url = https://github.com/Qihoo360/slash.git
+[submodule "third/blackwidow"]
+	path = third/blackwidow
+	url = https://github.com/shannondb/blackwidow.git
