@@ -124,11 +124,19 @@ bool PikaMonitorThread::HasMonitorClients() {
 }
 
 pink::WriteStatus PikaMonitorThread::SendMessage(int32_t fd, std::string& message) {
+  size_t retry = 0;
   ssize_t nwritten = 0, message_len_sended = 0, message_len_left = message.size();
   while (message_len_left > 0) {
     nwritten = write(fd, message.data() + message_len_sended, message_len_left);
     if (nwritten == -1 && errno == EAGAIN) {
-      continue;
+      // If the write buffer is full, but the client no longer consumes, it will
+      // get stuck in the loop and cause the entire Pika to block becase of monitor_mutex_protector_.
+      // So we put a limit on the number of retries
+      if (++retry >= 10) {
+        return pink::kWriteError;
+      } else {
+        continue;
+      }
     } else if (nwritten == -1) {
       return pink::kWriteError;
     }
@@ -152,7 +160,7 @@ void* PikaMonitorThread::ThreadMain() {
     }
     if (should_stop()) {
       break;
-    } 
+    }
     {
       slash::MutexLock lm(&monitor_mutex_protector_);
       while (!cron_tasks_.empty()) {
@@ -179,7 +187,7 @@ void* PikaMonitorThread::ThreadMain() {
         iter != messages_deque.end();
         ++iter) {
       messages_transfer.append(iter->data(), iter->size());
-      messages_transfer.append("\n"); 
+      messages_transfer.append("\n");
     }
     if (messages_transfer == "+") {
       continue;
