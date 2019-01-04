@@ -108,7 +108,7 @@ bool PikaBinlogTransverter::BinlogDecode(BinlogType type,
   slash::GetFixed32(&binlog_str, &binlog_item->filenum_);
   slash::GetFixed64(&binlog_str, &binlog_item->offset_);
   slash::GetFixed32(&binlog_str, &content_length);
-  if (binlog_str.size() >= content_length) {
+  if (binlog_str.size() == content_length) {
     binlog_item->content_.assign(binlog_str.data(), content_length);
   } else {
     LOG(ERROR) << "Binlog Item get content error, expect length:" << content_length << " left length:" << binlog_str.size();
