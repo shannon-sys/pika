@@ -239,14 +239,14 @@ void HMgetCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
 }
 
 void HMgetCmd::Do() {
-  std::vector<std::string> values;
-  shannon::Status s = g_pika_server->db()->HMGet(key_, fields_, &values);
+  std::vector<blackwidow::ValueStatus> vss;
+  shannon::Status s = g_pika_server->db()->HMGet(key_, fields_, &vss);
   if (s.ok() || s.IsNotFound()) {
-    res_.AppendArrayLen(values.size());
-    for (const auto& value : values) {
-      if (!value.empty()) {
-        res_.AppendStringLen(value.size());
-        res_.AppendContent(value);
+    res_.AppendArrayLen(vss.size());
+    for (const auto& vs : vss) {
+      if (!vs.status.ok()) {
+        res_.AppendStringLen(vs.value.size());
+        res_.AppendContent(vs.value);
       } else {
         res_.AppendContent("$-1");
       }
@@ -467,6 +467,114 @@ void HScanxCmd::Do() {
     }
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
+  }
+  return;
+}
+
+void PKHScanRangeCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+  if (!ptr_info->CheckArg(argv.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHScanRange);
+    return;
+  }
+  key_ = argv[1];
+  field_start_ = argv[2];
+  field_end_ = argv[3];
+
+  size_t index = 4, argc = argv.size();
+  while (index < argc) {
+    std::string opt = slash::StringToLower(argv[index]);
+    if (opt == "match" || opt == "limit") {
+      index++;
+      if (index >= argc) {
+        res_.SetRes(CmdRes::kSyntaxErr);
+        return;
+      }
+      if (opt == "match") {
+        pattern_ = argv[index];
+      } else if (!slash::string2l(argv[index].data(), argv[index].size(), &limit_) || limit_ <= 0) {
+        res_.SetRes(CmdRes::kInvalidInt);
+        return;
+      }
+    } else {
+      res_.SetRes(CmdRes::kSyntaxErr);
+      return;
+    }
+    index++;
+  }
+  return;
+}
+
+void PKHScanRangeCmd::Do() {
+  std::string next_field;
+  std::vector<blackwidow::FieldValue> field_values;
+  shannon::Status s = g_pika_server->db()->PKHScanRange(key_, field_start_, field_end_,
+          pattern_, limit_, &field_values, &next_field);
+
+  if (s.ok() || s.IsNotFound()) {
+    res_.AppendArrayLen(2);
+    res_.AppendString(next_field);
+
+    res_.AppendArrayLen(2 * field_values.size());
+    for (const auto& field_value : field_values) {
+      res_.AppendString(field_value.field);
+      res_.AppendString(field_value.value);
+    }
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s.ToString());
+  }
+  return;
+}
+
+void PKHRScanRangeCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+  if (!ptr_info->CheckArg(argv.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHRScanRange);
+    return;
+  }
+  key_ = argv[1];
+  field_start_ = argv[2];
+  field_end_ = argv[3];
+
+  size_t index = 4, argc = argv.size();
+  while (index < argc) {
+    std::string opt = slash::StringToLower(argv[index]);
+    if (opt == "match" || opt == "limit") {
+      index++;
+      if (index >= argc) {
+        res_.SetRes(CmdRes::kSyntaxErr);
+        return;
+      }
+      if (opt == "match") {
+        pattern_ = argv[index];
+      } else if (!slash::string2l(argv[index].data(), argv[index].size(), &limit_) || limit_ <= 0) {
+        res_.SetRes(CmdRes::kInvalidInt);
+        return;
+      }
+    } else {
+      res_.SetRes(CmdRes::kSyntaxErr);
+      return;
+    }
+    index++;
+  }
+  return;
+}
+
+void PKHRScanRangeCmd::Do() {
+  std::string next_field;
+  std::vector<blackwidow::FieldValue> field_values;
+  shannon::Status s = g_pika_server->db()->PKHRScanRange(key_, field_start_, field_end_,
+          pattern_, limit_, &field_values, &next_field);
+
+  if (s.ok() || s.IsNotFound()) {
+    res_.AppendArrayLen(2);
+    res_.AppendString(next_field);
+
+    res_.AppendArrayLen(2 * field_values.size());
+    for (const auto& field_value : field_values) {
+      res_.AppendString(field_value.field);
+      res_.AppendString(field_value.value);
+    }
+  } else {
+     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
 }

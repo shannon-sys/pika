@@ -170,7 +170,13 @@ void InitCmdInfoTable() {
   ////Scanx
   CmdInfo* scanxptr = new CmdInfo(kCmdNameScanx, -3, kCmdFlagsRead | kCmdFlagsKv);
   cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNameScanx, scanxptr));
-
+  ////PKScanRange
+  CmdInfo* pkscanrangeptr = new CmdInfo(kCmdNamePKScanRange, -4, kCmdFlagsRead | kCmdFlagsKv);
+  cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKScanRange, pkscanrangeptr));
+  ////PKRScanRange
+  CmdInfo* pkrscanrangeptr = new CmdInfo(kCmdNamePKRScanRange, -4, kCmdFlagsRead | kCmdFlagsKv);
+  cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKRScanRange, pkrscanrangeptr));
+ 
   //Hash
   ////HDel
   CmdInfo* hdelptr = new CmdInfo(kCmdNameHDel, -3, kCmdFlagsWrite | kCmdFlagsHash);
@@ -600,6 +606,13 @@ void InitCmdTable(std::unordered_map<std::string, Cmd*> *cmd_table) {
   ////ScanxCmd
   Cmd* scanxptr = new ScanxCmd();
   cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNameScanx, scanxptr));
+  ////PKScanRange
+  Cmd* pkscanrangeptr = new PKScanRangeCmd();
+  cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNamePKScanRange, pkscanrangeptr));
+  ////PKScanRange
+  Cmd* pkrscanrangeptr = new PKRScanRangeCmd();
+  cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNamePKRScanRange, pkrscanrangeptr));
+
   //Hash
   ////HDelCmd
   Cmd* hdelptr = new HDelCmd();
@@ -649,6 +662,13 @@ void InitCmdTable(std::unordered_map<std::string, Cmd*> *cmd_table) {
   ////HScanxCmd
   Cmd* hscanxptr = new HScanxCmd();
   cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNameHScanx, hscanxptr));
+  ////PKHScanRange
+  CmdInfo* pkhscanrange = new CmdInfo(kCmdNamePKHScanRange, -4, kCmdFlagsRead | kCmdFlagsHash);
+  cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKHScanRange, pkhscanrange));
+  ////PKHRScanRange
+  CmdInfo* pkhrscanrange = new CmdInfo(kCmdNamePKHRScanRange, -4, kCmdFlagsRead | kCmdFlagsHash);
+  cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKHRScanRange, pkhrscanrange));
+ 
   //List
   Cmd* lindexptr = new LIndexCmd();
   cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNameLIndex, lindexptr));

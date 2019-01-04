@@ -1679,13 +1679,13 @@ void PikaServer::SlowlogPushEntry(const PikaCmdArgsType& argv, int32_t time, int
 }
 
 void PikaServer::RunKeyScan() {
-  std::vector<uint64_t> new_key_nums_v;
+  std::vector<blackwidow::KeyInfo> new_key_infos;
 
-  shannon::Status s = db_->GetKeyNum(&new_key_nums_v);
+  shannon::Status s = db_->GetKeyNum(&new_key_infos);
 
   slash::MutexLock lm(&key_scan_protector_);
   if (s.ok()) {
-    key_scan_info_.key_nums_v = new_key_nums_v;
+    key_scan_info_.key_infos = new_key_infos;
   }
   key_scan_info_.key_scaning_ = false;
 }
