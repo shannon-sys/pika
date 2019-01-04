@@ -106,6 +106,22 @@ void SlaveofCmd::Do() {
       }
       g_pika_server->logger_->SetProducerStatus(filenum_, pro_offset_);
     }
+  } else {
+    if (is_noone_) {
+      // Stop rsync
+      LOG(INFO) << "Slaveof no one in double-master mode";
+      slash::StopRsync(g_pika_conf->db_sync_path());
+
+      g_pika_server->RemoveMaster();
+
+      std::string double_master_ip = g_pika_conf->double_master_ip();
+      if (double_master_ip == "127.0.0.1") {
+        double_master_ip = g_pika_server->host();
+      }
+      g_pika_server->DeleteSlave(double_master_ip, g_pika_conf->double_master_port());
+      res_.SetRes(CmdRes::kOk);
+      return;
+    }
   }
 
   // The conf file already configured double-master item, but now this

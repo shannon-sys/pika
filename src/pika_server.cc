@@ -360,6 +360,18 @@ void PikaServer::DeleteSlave(const std::string& ip, int64_t port) {
     }
     iter++;
   }
+
+  slave_num = slaves_.size();
+  {
+    slash::RWLock l(&state_protector_, true);
+    if (slave_num == 0) {
+      role_ &= ~PIKA_ROLE_MASTER;
+      if (DoubleMasterMode()) {
+        role_ |= PIKA_ROLE_DOUBLE_MASTER;
+      }
+    }
+  }
+
   if (iter == slaves_.end()) {
     return;
   }
@@ -367,15 +379,6 @@ void PikaServer::DeleteSlave(const std::string& ip, int64_t port) {
     delete static_cast<PikaBinlogSenderThread*>(iter->sender);
   }
   slaves_.erase(iter);
-  slave_num = slaves_.size();
-  }
-
-  slash::RWLock l(&state_protector_, true);
-  if (slave_num == 0) {
-    role_ &= ~PIKA_ROLE_MASTER;
-    if (DoubleMasterMode()) {
-      role_ |= PIKA_ROLE_DOUBLE_MASTER;
-    }
   }
 }
 
