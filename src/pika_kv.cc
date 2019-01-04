@@ -1103,10 +1103,10 @@ void TtlCmd::Do() {
     res_.AppendInteger(type_timestamp[blackwidow::kHashes]);
   } else if (type_timestamp[blackwidow::kLists] != -2) {
     res_.AppendInteger(type_timestamp[blackwidow::kLists]);
-  } else if (type_timestamp[blackwidow::kSets] != -2) {
-    res_.AppendInteger(type_timestamp[blackwidow::kSets]);
   } else if (type_timestamp[blackwidow::kZSets] != -2) {
     res_.AppendInteger(type_timestamp[blackwidow::kZSets]);
+  } else if (type_timestamp[blackwidow::kSets] != -2) {
+    res_.AppendInteger(type_timestamp[blackwidow::kSets]);
   } else {
     // mean this key not exist
     res_.AppendInteger(-2);
