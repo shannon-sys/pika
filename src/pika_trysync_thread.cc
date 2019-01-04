@@ -46,7 +46,7 @@ bool PikaTrysyncThread::Send(std::string lip) {
   uint32_t filenum;
   uint64_t pro_offset;
   g_pika_server->logger_->GetProducerStatus(&filenum, &pro_offset);
-  
+
   if (g_pika_server->force_full_sync()) {
     argv.push_back(std::to_string(UINT32_MAX));
     argv.push_back(std::to_string(0));
@@ -107,7 +107,7 @@ bool PikaTrysyncThread::RecvProc() {
       // Failed
       if (kInnerReplWait == reply) {
         // You can't sync this time, but may be different next time,
-        // This may happened when 
+        // This may happened when
         // 1, Master do bgsave first.
         // 2, Master waiting for an existing bgsaving process
         // 3, Master do dbsyncing
@@ -235,7 +235,7 @@ void* PikaTrysyncThread::ThreadMain() {
     }
     sleep(2);
     LOG(INFO) << "Should connect master";
-    
+
     std::string master_ip = g_pika_server->master_ip();
     int master_port = g_pika_server->master_port();
     std::string dbsync_path = g_pika_conf->db_sync_path();
@@ -268,6 +268,7 @@ void* PikaTrysyncThread::ThreadMain() {
         if (rsync->Connect(lip, g_pika_conf->port() + 3000, "").ok()) {
           LOG(INFO) << "rsync successfully started, address:" << lip << ":" << g_pika_conf->port() + 3000;
           rsync->Close();
+          delete rsync;
           break;
         } else {
           sleep(1);
