@@ -13,7 +13,7 @@
 #include <sys/time.h>
 #include "blackwidow/blackwidow.h"
 #include "coding.h"
-#include "write_batch_internal.h"
+#include "src/write_batch_internal.h"
 
 #include <glog/logging.h>
 #include <sys/syscall.h>

@@ -26,7 +26,7 @@
 #include "include/pika_conf.h"
 #include "include/pika_dispatch_thread.h"
 #include "swift/shannon_db.h"
-#include "write_batch_internal.h"
+#include "src/write_batch_internal.h"
 #include "coding.h"
 
 extern PikaConf *g_pika_conf;
