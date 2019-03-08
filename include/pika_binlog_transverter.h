@@ -9,9 +9,9 @@
 #include <iostream>
 #include <vector>
 #include <glog/logging.h>
-
 #include "slash/include/slash_coding.h"
-
+#include "swift/shannon_db.h"
+#include "swift/log_iter.h"
 /*
  * ***********************************************Type First Binlog Item Format***********************************************
  * | <Type> | <Create Time> | <Server Id> | <Binlog Logic Id> | <File Num> | <Offset> | <Content Length> |      <Content>     |
@@ -25,6 +25,40 @@ enum BinlogType {
 class BinlogItem {
   public:
     BinlogItem() :
+        timestamp_(0) {
+      key_ = "";
+      value_ = "";
+    }
+
+    friend class PikaBinlogTransverter;
+
+  const std::string& key()              const;
+  const std::string& value()            const;
+  shannon::LogOpType optype()           const;
+  uint64_t timestamp()                  const;
+  const std::string& db()               const;
+  const std::string& cf()               const;
+  std::string ToString()                const;
+
+  void set_key(std::string key);
+  void set_value(std::string value);
+  void set_optype(shannon::LogOpType optype);
+  void set_timestamp(uint64_t timestamp);
+  void set_db(std::string db);
+  void set_cf(std::string cf);
+
+  private:
+    std::string key_ = "";
+    std::string value_ = "";
+    shannon::LogOpType optype_;
+    uint64_t timestamp_;
+    std::string db_ = "";
+    std::string cf_ = "";
+};
+
+class BinlogItem2 {
+  public:
+    BinlogItem2() :
         exec_time_(0),
         server_id_(0),
         logic_id_(0),
@@ -58,9 +92,28 @@ class BinlogItem {
     std::vector<std::string> extends_;
 };
 
-class PikaBinlogTransverter{
+class PikaBinlogTransverter {
   public:
     PikaBinlogTransverter() {};
+
+    static std::string BinlogEncode(shannon::Slice& key,
+                                    shannon::Slice& value,
+                                    shannon::LogOpType optype,
+                                    uint64_t timestamp,
+                                    shannon::Slice& db_name,
+                                    shannon::Slice& cf_name);
+
+    static bool BinlogDecode(BinlogItem* binlog_item,
+                             std::string& str);
+
+    static bool BinlogDecode(std::string* key,
+                             std::string* value,
+                             shannon::LogOpType* optype,
+                             uint64_t* timestamp,
+                             std::string* db,
+                             std::string* cf,
+                             std::string& str);
+
     static std::string BinlogEncode(BinlogType type,
                                     uint32_t exec_time,
                                     uint32_t server_id,
@@ -68,11 +121,15 @@ class PikaBinlogTransverter{
                                     uint32_t filenum,
                                     uint64_t offset,
                                     const std::string& content,
-                                    const std::vector<std::string>& extends);
+                                    const std::vector<std::string>& extends) {
+        return "";
+    }
 
     static bool BinlogDecode(BinlogType type,
                              const std::string& binlog,
-                             BinlogItem* binlog_item);
+                             BinlogItem* binlog_item) {
+        return false;
+    }
 
 };
 

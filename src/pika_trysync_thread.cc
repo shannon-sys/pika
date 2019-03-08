@@ -45,15 +45,14 @@ bool PikaTrysyncThread::Send(std::string lip) {
   argv.push_back(std::to_string(g_pika_server->port()));
   uint32_t filenum;
   uint64_t pro_offset;
-  g_pika_server->logger_->GetProducerStatus(&filenum, &pro_offset);
-
+  g_pika_server->logger_->GetProducerStatus(&pro_offset);
   if (g_pika_server->force_full_sync()) {
     argv.push_back(std::to_string(UINT32_MAX));
     argv.push_back(std::to_string(0));
   } else if (g_pika_server->DoubleMasterMode()) {
     uint64_t double_recv_offset;
     uint32_t double_recv_num;
-    g_pika_server->logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
+    g_pika_server->logger_->GetDoubleRecvInfo(&double_recv_offset);
     argv.push_back(std::to_string(double_recv_num));
     argv.push_back(std::to_string(double_recv_offset));
   } else {
@@ -130,6 +129,78 @@ bool PikaTrysyncThread::RecvProc() {
   return true;
 }
 
+void PikaTrysyncThread::ReadSstToKV(shannon::DB* db,
+        std::vector<shannon::ColumnFamilyHandle*>& handles,
+        const std::string sst_name) {
+  // start parse sst file
+  shannon::Status status = db->IngestExternFile(
+          const_cast<char*>(sst_name.data()), 1, &handles);
+  if (!status.ok()) {
+    LOG(WARNING)<<"Ingest sst file failed!"<<std::endl;
+    return;
+  }
+  // start delete sst file
+  while (slash::FileExists(sst_name)) {
+    slash::Status s = slash::DeleteFile(sst_name);
+    if (s.ok()) {
+        break;
+    }
+    sleep(1);
+  }
+  mutex_sst_file.lock();
+  map_sst_file.erase(sst_name);
+  mutex_sst_file.unlock();
+}
+
+bool PikaTrysyncThread::IsReceiveFileCompletion(std::string& file_name) {
+  if (file_name.compare(file_name.size() - 4, 4, ".sst") == 0) {
+    std::string scm_file_name = file_name.substr(0, file_name.size() - 4)+".scm";
+    if (slash::FileExists(scm_file_name)) {
+        slash::DeleteFile(scm_file_name);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool PikaTrysyncThread::ReceiveFiles() {
+  std::string db_sync_path = g_pika_conf->db_sync_path();
+  if (db_sync_path.back() != '/') {
+      db_sync_path += "/";
+  }
+  std::vector<std::string> paths;
+  paths.push_back(blackwidow::STRINGS_DB);
+  paths.push_back(blackwidow::HASHES_DB);
+  paths.push_back(blackwidow::LISTS_DB);
+  paths.push_back(blackwidow::ZSETS_DB);
+  paths.push_back(blackwidow::SETS_DB);
+  paths.push_back(blackwidow::DELKEYS_DB);
+  for (auto dir : paths) {
+    std::string path = db_sync_path + dir;
+    shannon::DB* db = g_pika_server->db()->GetDBByType(dir);
+    std::vector<shannon::ColumnFamilyHandle*> handles = g_pika_server->db()->
+        GetColumnFamilyHandlesByType(dir);
+    std::vector<std::string> files;
+    if (slash::GetChildren(path, files) == 0) {
+      if (files.size() > 0) {
+        for (auto sst_file : files) {
+          if (sst_file.compare(sst_file.size() - 4, 4, ".sst") != 0) {
+            continue;
+          }
+          std::string sst_file_path = path + "/" + sst_file;
+          std::unordered_map<std::string, std::thread>::iterator find = map_sst_file.find(sst_file);
+          if (find != map_sst_file.end()) {
+            continue;
+          }
+          if (IsReceiveFileCompletion(sst_file_path)) {
+            ReadSstToKV(db, handles, sst_file_path);
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
 // Try to update master offset
 // This may happend when dbsync from master finished
 // Here we do:
@@ -138,7 +209,14 @@ bool PikaTrysyncThread::RecvProc() {
 // 3, Update master offset, and the PikaTrysyncThread cron will connect and do slaveof task with master
 bool PikaTrysyncThread::TryUpdateMasterOffset() {
   // Check dbsync finished
-  std::string info_path = g_pika_conf->db_sync_path() + kBgsaveInfoFile;
+  // std::string info_path = g_pika_conf->db_sync_path() + kBgsaveInfoFile;
+  std::string info_path = g_pika_conf->db_sync_path();
+
+  ReceiveFiles();
+  if (info_path.back() != '/') {
+        info_path += "/";
+  }
+  info_path += kBgsaveInfoFile;
   if (!slash::FileExists(info_path)) {
     return false;
   }
@@ -194,12 +272,12 @@ bool PikaTrysyncThread::TryUpdateMasterOffset() {
   }
 
   // Update master offset
-  g_pika_server->logger_->SetProducerStatus(filenum, offset);
+  // g_pika_server->logger_->SetProducerStatus(filenum, offset);
 
   // If sender is the peer-master
   // need to update receive binlog info after rsync finished.
   if (g_pika_server->DoubleMasterMode() && g_pika_server->IsDoubleMaster(master_ip, master_port)) {
-    g_pika_server->logger_->SetDoubleRecvInfo(filenum, offset);
+    // g_pika_server->logger_->SetDoubleRecvInfo(filenum, offset);
     LOG(INFO) << "Update receive infomation after rsync finished. filenum: " << filenum << " offset: " << offset;
   }
   g_pika_server->WaitDBSyncFinish();

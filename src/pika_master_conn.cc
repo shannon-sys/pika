@@ -26,7 +26,7 @@ int PikaMasterConn::DealMessage(
     PikaCmdArgsType& argv, std::string* response) {
   //no reply
   //eq set_is_reply(false);
-  if (argv.empty()) {
+  /* if (argv.empty()) {
     return -2;
   }
 
@@ -62,9 +62,9 @@ int PikaMasterConn::DealMessage(
       slash::GetFixed32(&binlog_info, &exec_time);
       slash::GetFixed32(&binlog_info, &filenum);
       slash::GetFixed64(&binlog_info, &offset);
-      binlog_item.set_exec_time(exec_time);
-      binlog_item.set_filenum(filenum);
-      binlog_item.set_offset(offset);
+      // binlog_item.set_exec_time(exec_time);
+      // binlog_item.set_filenum(filenum);
+      // binlog_item.set_offset(offset);
 
       server_id = argv.back();  // server_id
       argv.pop_back();
@@ -104,6 +104,7 @@ int PikaMasterConn::DealMessage(
                                                 binlog_item.logic_id(),
                                                 binlog_item.filenum(),
                                                 binlog_item.offset()));
+
     g_pika_server->logger_->Unlock();
     g_pika_server->SignalNextBinlogBGSerial();
   }
@@ -112,6 +113,6 @@ int PikaMasterConn::DealMessage(
   BinlogItem *b = new BinlogItem(binlog_item);
   std::string dispatch_key = argv.size() >= 2 ? argv[1] : argv[0];
   g_pika_server->DispatchBinlogBG(dispatch_key, v, b, serial, is_readonly);
-
+  */
   return 0;
 }

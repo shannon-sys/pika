@@ -206,7 +206,7 @@ const std::string kCmdNamePSubscribe = "psubscribe";
 const std::string kCmdNamePUnSubscribe = "punsubscribe";
 
 typedef pink::RedisCmdArgsType PikaCmdArgsType;
-static const int RAW_ARGS_LEN = 1024 * 1024; 
+static const int RAW_ARGS_LEN = 1024 * 1024;
 
 enum CmdFlagsMask {
   kCmdFlagsMaskRW               = 1,
@@ -453,14 +453,16 @@ class Cmd {
       RedisAppendContent(content, v);
     }
 
-    return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
-                                               exec_time,
-                                               std::stoi(server_id),
-                                               logic_id,
-                                               filenum,
-                                               offset,
-                                               content,
-                                               {});
+    return "";
+
+    // return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
+    //                                           exec_time,
+    //                                           std::stoi(server_id),
+    //                                           logic_id,
+    //                                           filenum,
+    //                                           offset,
+    //                                           content,
+    //                                           {});
   }
 
  protected:

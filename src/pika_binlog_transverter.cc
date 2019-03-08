@@ -5,51 +5,51 @@
 
 #include "include/pika_binlog_transverter.h"
 
-uint32_t BinlogItem::exec_time() const {
+uint32_t BinlogItem2::exec_time() const {
   return exec_time_;
 }
 
-uint32_t BinlogItem::server_id() const {
+uint32_t BinlogItem2::server_id() const {
   return server_id_;
 }
 
-uint64_t BinlogItem::logic_id() const {
+uint64_t BinlogItem2::logic_id() const {
   return logic_id_;
 }
 
-uint32_t BinlogItem::filenum() const {
+uint32_t BinlogItem2::filenum() const {
   return filenum_;
 }
 
-uint64_t BinlogItem::offset() const {
+uint64_t BinlogItem2::offset() const {
   return offset_;
 }
 
-std::string BinlogItem::content() const {
+std::string BinlogItem2::content() const {
   return content_;
 }
 
-void BinlogItem::set_exec_time(uint32_t exec_time) {
+void BinlogItem2::set_exec_time(uint32_t exec_time) {
   exec_time_ = exec_time;
 }
 
-void BinlogItem::set_server_id(uint32_t server_id) {
+void BinlogItem2::set_server_id(uint32_t server_id) {
   server_id_ = server_id;
 }
 
-void BinlogItem::set_logic_id(uint64_t logic_id) {
+void BinlogItem2::set_logic_id(uint64_t logic_id) {
   logic_id_ = logic_id;
 }
 
-void BinlogItem::set_filenum(uint32_t filenum) {
+void BinlogItem2::set_filenum(uint32_t filenum) {
   filenum_ = filenum;
 }
 
-void BinlogItem::set_offset(uint64_t offset) {
+void BinlogItem2::set_offset(uint64_t offset) {
   offset_ = offset;
 }
 
-std::string BinlogItem::ToString() const {
+std::string BinlogItem2::ToString() const {
   std::string str;
   str.append("exec_time: "  + std::to_string(exec_time_));
   str.append(",server_id: " + std::to_string(server_id_));
@@ -70,50 +70,166 @@ std::string BinlogItem::ToString() const {
   return str;
 }
 
-std::string PikaBinlogTransverter::BinlogEncode(BinlogType type,
-                                                uint32_t exec_time,
-                                                uint32_t server_id,
-                                                uint64_t logic_id,
-                                                uint32_t filenum,
-                                                uint64_t offset,
-                                                const std::string& content,
-                                                const std::vector<std::string>& extends) {
-  std::string binlog;
-  slash::PutFixed16(&binlog, type);
-  slash::PutFixed32(&binlog, exec_time);
-  slash::PutFixed32(&binlog, server_id);
-  slash::PutFixed64(&binlog, logic_id);
-  slash::PutFixed32(&binlog, filenum);
-  slash::PutFixed64(&binlog, offset);
-  uint32_t content_length = content.size();
-  slash::PutFixed32(&binlog, content_length);
-  binlog.append(content);
-  return binlog;
+const std::string& BinlogItem::key() const {
+  return key_;
 }
 
-bool PikaBinlogTransverter::BinlogDecode(BinlogType type,
-                                         const std::string& binlog,
-                                         BinlogItem* binlog_item) {
-  uint16_t binlog_type = 0;
-  uint32_t content_length = 0;
-  std::string binlog_str = binlog;
-  slash::GetFixed16(&binlog_str, &binlog_type);
-  if (binlog_type != type) {
-    LOG(ERROR) << "Binlog Item type error, expect type:" << type << " actualy type: " << binlog_type;
+const std::string& BinlogItem::value() const {
+  return value_;
+}
+
+shannon::LogOpType BinlogItem::optype() const {
+  return optype_;
+}
+
+uint64_t BinlogItem::timestamp() const {
+  return timestamp_;
+}
+
+const std::string& BinlogItem::db() const {
+  return db_;
+}
+
+const std::string& BinlogItem::cf() const {
+  return cf_;
+}
+
+void BinlogItem::set_key(std::string key) {
+  key_ = key;
+}
+
+void BinlogItem::set_value(std::string value) {
+  value_ = value;
+}
+
+void BinlogItem::set_optype(shannon::LogOpType optype) {
+  optype_ = optype;
+}
+
+void BinlogItem::set_timestamp(uint64_t timestamp) {
+  timestamp_ = timestamp;
+}
+
+void BinlogItem::set_db(std::string db) {
+  db_ = db;
+}
+
+void BinlogItem::set_cf(std::string cf) {
+  cf_ = cf;
+}
+
+std::string BinlogItem::ToString() const {
+  std::string str;
+  str.append("key: " + key_);
+  str.append(",value: " + value_);
+  str.append(",optype: " + std::to_string(optype_));
+  str.append(",timestamp: " + std::to_string(timestamp_));
+  str.append(",db: " + db_);
+  str.append(",cf: " + cf_);
+  return str;
+}
+
+std::string PikaBinlogTransverter::BinlogEncode(shannon::Slice& key,
+                                                shannon::Slice& value,
+                                                shannon::LogOpType optype,
+                                                uint64_t timestamp,
+                                                shannon::Slice& db_name,
+                                                shannon::Slice& cf_name) {
+  std::string str;
+  size_t key_size = key.size();
+  size_t value_size = value.size();
+  size_t db_name_size = db_name.size();
+  size_t cf_name_size = cf_name.size();
+  size_t offset = 0;
+
+  str.resize(2 * sizeof(size_t) + key.size() + value.size() + sizeof(optype) +
+             sizeof(timestamp) + 2 * sizeof(size_t) + db_name_size + cf_name_size);
+  char *data = const_cast<char*>(str.data());
+  memcpy(data + offset, &key_size, sizeof(key_size));
+  offset += sizeof(size_t);
+  memcpy(data + offset, &value_size, sizeof(value_size));
+  offset += sizeof(size_t);
+  memcpy(data + offset, key.data(), key.size());
+  offset += key.size();
+  memcpy(data + offset, value.data(), value.size());
+  offset += value.size();
+  memcpy(data + offset, &optype, sizeof(optype));
+  offset += sizeof(optype);
+  memcpy(data + offset, &timestamp, sizeof(timestamp));
+  offset += sizeof(timestamp);
+  memcpy(data + offset, &db_name_size, sizeof(db_name_size));
+  offset += sizeof(size_t);
+  memcpy(data + offset, &cf_name_size, sizeof(cf_name_size));
+  offset += sizeof(size_t);
+  memcpy(data + offset, db_name.data(), db_name.size());
+  offset += db_name.size();
+  memcpy(data + offset, cf_name.data(), cf_name.size());
+  offset += cf_name.size();
+  return str;
+}
+
+bool PikaBinlogTransverter::BinlogDecode(BinlogItem* binlog_item,
+                                         std::string& str) {
+  std::string key, value;
+  shannon::LogOpType optype;
+  uint64_t timestamp;
+  std::string db, cf;
+  bool flag = BinlogDecode(&key, &value, &optype, &timestamp, &db, &cf, str);
+  if (flag) {
+    binlog_item->set_key(key);
+    binlog_item->set_value(value);
+    binlog_item->set_optype(optype);
+    binlog_item->set_timestamp(timestamp);
+    binlog_item->set_db(db);
+    binlog_item->set_cf(cf);
+  }
+  return flag;
+}
+
+bool PikaBinlogTransverter::BinlogDecode(std::string* key,
+                                         std::string* value,
+                                         shannon::LogOpType* optype,
+                                         uint64_t* timestamp,
+                                         std::string* db_name,
+                                         std::string* cf_name,
+                                         std::string& str) {
+  size_t key_size, value_size, db_name_size, cf_name_size;
+  size_t offset = 0;
+  if (str.size() <= (sizeof(size_t) * 4 + sizeof(shannon::LogOpType) +
+                     sizeof(uint64_t))) {
     return false;
   }
-  slash::GetFixed32(&binlog_str, &binlog_item->exec_time_);
-  slash::GetFixed32(&binlog_str, &binlog_item->server_id_);
-  slash::GetFixed64(&binlog_str, &binlog_item->logic_id_);
-  slash::GetFixed32(&binlog_str, &binlog_item->filenum_);
-  slash::GetFixed64(&binlog_str, &binlog_item->offset_);
-  slash::GetFixed32(&binlog_str, &content_length);
-  if (binlog_str.size() == content_length) {
-    binlog_item->content_.assign(binlog_str.data(), content_length);
-  } else {
-    LOG(ERROR) << "Binlog Item get content error, expect length:" << content_length << " left length:" << binlog_str.size();
-    return false;
+  memcpy(&key_size, str.data() + offset, sizeof(key_size));
+  offset += sizeof(key_size);
+  memcpy(&value_size, str.data() + offset, sizeof(value_size));
+  offset += sizeof(value_size);
+  if (key != NULL) {
+    key->clear();
+    key->assign(str.data() + offset, key_size);
   }
-  binlog_str.erase(0, content_length);
+  offset += key_size;
+  if (value != NULL) {
+    value->clear();
+    value->assign(str.data() + offset, value_size);
+  }
+  offset += value_size;
+  memcpy(optype, str.data() + offset, sizeof(shannon::LogOpType));
+  offset += sizeof(shannon::LogOpType);
+  memcpy(timestamp, str.data() + offset, sizeof(uint64_t));
+  offset += sizeof(uint64_t);
+  memcpy(&db_name_size, str.data() + offset, sizeof(size_t));
+  offset += sizeof(size_t);
+  memcpy(&cf_name_size, str.data() + offset, sizeof(size_t));
+  offset += sizeof(size_t);
+  if (db_name != NULL) {
+    db_name->clear();
+    db_name->assign(str.data() + offset, db_name_size);
+  }
+  offset += db_name_size;
+  if (cf_name != NULL) {
+    cf_name->clear();
+    cf_name->assign(str.data() + offset, cf_name_size);
+  }
+  offset += cf_name_size;
   return true;
 }

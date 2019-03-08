@@ -7,6 +7,7 @@
 #define PIKA_SERVER_H_
 
 #include <vector>
+#include <queue>
 #include <functional>
 #include <map>
 #include <unordered_set>
@@ -59,6 +60,9 @@ class PikaServer {
   }
   int port() {
     return port_;
+  }
+  int slave_num() {
+    return slaves_.size();
   }
   time_t start_time_s() {
     return start_time_s_;
@@ -149,6 +153,7 @@ class PikaServer {
   Status GetSmallestValidLog(uint32_t* max);
   void MayUpdateSlavesMap(int64_t sid, int32_t hb_fd);
   void BecomeMaster();
+  int64_t GetSlowestSlaveSid();
 
   slash::Mutex slave_mutex_; // protect slaves_;
   std::vector<SlaveItem> slaves_;
@@ -265,7 +270,7 @@ class PikaServer {
   };
   bool PurgeLogs(uint32_t to, bool manual, bool force);
   bool PurgeFiles(uint32_t to, bool manual, bool force);
-  bool GetPurgeWindow(uint32_t &max);
+  bool GetPurgeWindow(uint64_t &max);
   void ClearPurge() {
     purging_ = false;
   }
@@ -281,6 +286,7 @@ class PikaServer {
       : p(_p), ip(_ip), port(_port) {}
   };
   void DBSyncSendFile(const std::string& ip, int port);
+  void DBSyncBuildSSTFile(const std::string& ip, int port);
   bool ChangeDb(const std::string& new_path);
   int CountSyncSlaves() {
     slash::MutexLock ldb(&db_sync_protector_);
@@ -443,6 +449,11 @@ class PikaServer {
    */
   slash::Mutex bgsave_protector_;
   pink::BGThread bgsave_thread_;
+  pink::BGThread bgrsync_thread_;
+  bool in_rsync_;
+  slash::Mutex bgrsync_mutex_;
+  std::atomic<int> bgrsync_remainderfile_count_;
+  std::queue<std::string> bgrsync_filenames_;
   blackwidow::BackupEngine *bgsave_engine_;
   BGSaveInfo bgsave_info_;
 
@@ -473,9 +484,10 @@ class PikaServer {
    */
   slash::Mutex db_sync_protector_;
   std::unordered_set<std::string> db_sync_slaves_;
-  void TryDBSync(const std::string& ip, int port, int32_t top);
+  void TryDBSync(const std::string& ip, int port, uint64_t timestamp);
   void DBSync(const std::string& ip, int port);
   static void DoDBSync(void* arg);
+  static void DoBuildSSTFile(void *arg);
 
   /*
    * Flushall use

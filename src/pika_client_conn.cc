@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <sys/syscall.h>
 
 #include <glog/logging.h>
 
@@ -14,9 +15,13 @@
 #include "include/pika_conf.h"
 #include "include/pika_client_conn.h"
 #include "include/pika_dispatch_thread.h"
+#include "include/rate_limiter.h"
+#include <sys/syscall.h>
+#include <unistd.h>
 
 extern PikaServer* g_pika_server;
 extern PikaConf* g_pika_conf;
+extern RateLimiter* g_rate_limiter;
 
 static std::string ConstructPubSubResp(
                                 const std::string& cmd,
@@ -144,9 +149,6 @@ std::string PikaClientConn::DoCmd(
   }
 
   if (cinfo_ptr->is_write()) {
-    if (g_pika_server->BinlogIoError()) {
-      return "-ERR Writing binlog failed, maybe no space left on device\r\n";
-    }
     if (g_pika_server->readonly()) {
       return "-ERR Server in read-only\r\n";
     }
@@ -160,36 +162,15 @@ std::string PikaClientConn::DoCmd(
     g_pika_server->RWLockReader();
   }
 
-  uint32_t exec_time = time(nullptr);
+  // uint32_t exec_time = time(nullptr);
   c_ptr->Do();
-
-  if (cinfo_ptr->is_write()
-    && g_pika_conf->write_binlog()) {
-    if (c_ptr->res().ok()) {
-      g_pika_server->logger_->Lock();
-      uint32_t filenum = 0;
-      uint64_t offset = 0;
-      uint64_t logic_id = 0;
-      g_pika_server->logger_->GetProducerStatus(&filenum, &offset, &logic_id);
-
-      std::string binlog = c_ptr->ToBinlog(argv,
-                                           exec_time,
-                                           g_pika_conf->server_id(),
-                                           logic_id,
-                                           filenum,
-                                           offset);
-      slash::Status s;
-      if (!binlog.empty()) {
-        s = g_pika_server->logger_->Put(binlog);
-      }
-
-      g_pika_server->logger_->Unlock();
-      if (!s.ok()) {
-        LOG(WARNING) << "Writing binlog failed, maybe no space left on device";
-        g_pika_server->SetBinlogIoError(true);
-        return "-ERR Writing binlog failed, maybe no space left on device\r\n";
-      }
-    }
+  if (g_pika_server->slave_num() > 0 && cinfo_ptr->is_write()) {
+    // g_rate_limiter->Lock();
+    // int64_t cmd_size = g_pika_server->db()->GetAndResetWriteSize();
+    g_rate_limiter->add(g_pika_server->db()->GetAndResetWriteSize());
+    // g_rate_limiter->UnLock();
+  } else {
+    g_rate_limiter->set(0);
   }
 
   if (!cinfo_ptr->is_suspend()) {

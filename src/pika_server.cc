@@ -26,10 +26,12 @@
 #include "include/pika_conf.h"
 #include "include/pika_dispatch_thread.h"
 #include "swift/shannon_db.h"
-#include "src/write_batch_internal.h"
 #include "coding.h"
+#include "include/rate_limiter.h"
+#include <unistd.h>
 
 extern PikaConf *g_pika_conf;
+extern RateLimiter *g_rate_limiter;
 
 PikaServer::PikaServer() :
   ping_thread_(NULL),
@@ -75,7 +77,6 @@ PikaServer::PikaServer() :
   assert(s.ok());
   LOG(INFO) << "DB Success";
 
-
   // Create thread
   worker_num_ = std::min(g_pika_conf->thread_num(),
                          PIKA_MAX_WORKER_THREAD_NUM);
@@ -105,13 +106,11 @@ PikaServer::PikaServer() :
 
   pthread_rwlock_init(&state_protector_, NULL);
   shannonOptionInit(&bw_option);
-  logger_ = new Binlog(g_pika_conf->log_path(), g_pika_conf->binlog_file_size());
-  shannon::Status status = logger_->Open(bw_option);
-  assert(status.ok());
+  logger_ = new Binlog();
+  logger_->db_ = db_;
   uint64_t double_recv_offset;
-  uint32_t double_recv_num;
-  logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
-  LOG(INFO) << "double recv info: filenum " << double_recv_num << " offset " << double_recv_offset;
+  logger_->GetDoubleRecvInfo(&double_recv_offset);
+  LOG(INFO) << "double recv info: offset " << double_recv_offset;
 
   pthread_rwlock_init(&slowlog_protector_, NULL);
 }
@@ -282,7 +281,7 @@ void PikaServer::Start() {
     LOG(FATAL) << "Start Dispatch Error: " << ret << (ret == pink::kBindError ? ": bind port " + std::to_string(port_) + " conflict"
             : ": other error") << ", Listen on this port to handle the connected redis client";
   }
-  ret = pika_binlog_receiver_thread_->StartThread();
+  ret = pika_binlog_receiver_thread_->StartThread( );
   if (ret != pink::kSuccess) {
     delete logger_;
     db_.reset();
@@ -381,6 +380,9 @@ void PikaServer::DeleteSlave(const std::string& ip, int64_t port) {
     delete static_cast<PikaBinlogSenderThread*>(iter->sender);
   }
   slaves_.erase(iter);
+  if (slaves_.size() == 0) {
+    g_rate_limiter->init();
+  }
   }
 }
 
@@ -448,6 +450,7 @@ bool PikaServer::ChangeDb(const std::string& new_path) {
   shannon::Status s = db_->Open(bw_option, db_path);
   assert(db_);
   assert(s.ok());
+  logger_->db_ = db_;
   slash::DeleteDirIfExist(tmp_path);
   LOG(INFO) << "Change db success";
   return true;
@@ -462,6 +465,24 @@ bool PikaServer::IsDoubleMaster(const std::string master_ip, int master_port) {
   }
 }
 
+int64_t PikaServer::GetSlowestSlaveSid() {
+  slash::MutexLock l(&slave_mutex_);
+  std::vector<SlaveItem>::iterator iter = slaves_.begin();
+  int64_t sid = 0;
+  uint64_t offset = 0;
+  while (iter != slaves_.end()) {
+    if (sid == 0) {
+      offset = reinterpret_cast<PikaBinlogSenderThread*>(iter->sender)->offset();
+      sid = iter->sid;
+    } else if (iter->sender != NULL &&
+            reinterpret_cast<PikaBinlogSenderThread*>(iter->sender)->offset() < offset) {
+      offset = reinterpret_cast<PikaBinlogSenderThread*>(iter->sender)->offset();
+      sid = iter->sid;
+    }
+    iter ++;
+  }
+  return sid;
+}
 
 void PikaServer::MayUpdateSlavesMap(int64_t sid, int32_t hb_fd) {
   slash::MutexLock l(&slave_mutex_);
@@ -555,17 +576,15 @@ int32_t PikaServer::GetSlaveListString(std::string& slave_list_str) {
       continue;
     }
 
-    uint32_t master_filenum, slave_filenum;
     uint64_t master_offset, slave_offset;
-    logger_->GetProducerStatus(&master_filenum, &master_offset);
+    logger_->GetProducerStatus(&master_offset);
     PikaBinlogSenderThread* ptr_sender = static_cast<PikaBinlogSenderThread*>(iter->sender);
-    slave_filenum = ptr_sender->filenum();
+    // slave_filenum = ptr_sender->filenum();
     slave_offset = ptr_sender->con_offset();
 
-    uint64_t lag = (master_filenum - slave_filenum) * logger_->file_size()
-      + (master_offset - slave_offset);
+    uint64_t lag = (master_offset - slave_offset);
 
-    slave_ip_port =(*iter).ip_port;
+    slave_ip_port = (*iter).ip_port;
     tmp_stream << "slave" << index++
       << ":ip=" << slave_ip_port.substr(0, slave_ip_port.find(":"))
       << ",port=" << slave_ip_port.substr(slave_ip_port.find(":") + 1)
@@ -702,7 +721,7 @@ void PikaServer::SyncError() {
   slash::RWLock l(&state_protector_, true);
   repl_state_ = PIKA_REPL_ERROR;
   }
-  if (ping_thread_ != NULL)  {
+  if (ping_thread_ != NULL) {
     int err = ping_thread_->StopThread();
     if (err != 0) {
       std::string msg = "can't join thread " + std::string(strerror(err));
@@ -743,21 +762,13 @@ void PikaServer::RemoveMaster() {
   }
 }
 
-void PikaServer::TryDBSync(const std::string& ip, int port, int32_t top) {
+void PikaServer::TryDBSync(const std::string& ip, int port, uint64_t top) {
   std::string bg_path;
-  uint32_t bg_filenum = 0;
   {
     slash::MutexLock l(&bgsave_protector_);
     bg_path = bgsave_info_.path;
-    bg_filenum = bgsave_info_.filenum;
   }
 
-  if (0 != slash::IsDir(bg_path) ||                               //Bgsaving dir exist
-      !slash::FileExists(NewFileName(logger_->filename, bg_filenum)) ||  //filenum can be found in binglog
-      top - bg_filenum > kDBSyncMaxGap) {      //The file is not too old
-    // Need Bgsave first
-    Bgsave();
-  }
   DBSync(ip, port);
 }
 
@@ -773,18 +784,87 @@ void PikaServer::DBSync(const std::string& ip, int port) {
   }
   // Reuse the bgsave_thread_
   // Since we expect Bgsave and DBSync execute serially
+  in_rsync_ = true;
   bgsave_thread_.StartThread();
+  bgrsync_thread_.StartThread();
   DBSyncArg *arg = new DBSyncArg(this, ip, port);
+  DBSyncArg *arg2 = new DBSyncArg(this, ip, port);
   bgsave_thread_.Schedule(&DoDBSync, static_cast<void*>(arg));
+  bgrsync_thread_.Schedule(&DoDBSync, static_cast<void*>(arg2));
+}
+
+void PikaServer::DoBuildSSTFile(void *arg) {
+  DBSyncArg *ppurge = static_cast<DBSyncArg*>(arg);
+  PikaServer* ps = ppurge->p;
+
+  ps->DBSyncBuildSSTFile(ppurge->ip, ppurge->port);
+
+  delete (PurgeArg*)arg;
 }
 
 void PikaServer::DoDBSync(void* arg) {
   DBSyncArg *ppurge = static_cast<DBSyncArg*>(arg);
   PikaServer* ps = ppurge->p;
 
-  ps->DBSyncSendFile(ppurge->ip, ppurge->port);
+  ps->DBSyncBuildSSTFile(ppurge->ip, ppurge->port);
 
   delete (PurgeArg*)arg;
+}
+
+void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
+  // Get all files need to send
+  std::vector<std::string> paths;
+  paths.push_back(blackwidow::STRINGS_DB);
+  paths.push_back(blackwidow::HASHES_DB);
+  paths.push_back(blackwidow::LISTS_DB);
+  paths.push_back(blackwidow::ZSETS_DB);
+  paths.push_back(blackwidow::SETS_DB);
+  paths.push_back(blackwidow::DELKEYS_DB);
+  std::string db_sync_path = g_pika_conf->db_sync_path();
+  LOG(INFO) << "Start Send files in " << db_sync_path << " to " << ip;
+  if (slash::FileExists(db_sync_path) || slash::CreateDir(db_sync_path) == 0) {
+    shannon::ReadOptions read_options;
+    for (auto path : paths) {
+      std::string db_path = db_sync_path + "/" + path;
+      if (slash::FileExists(db_path) || slash::CreateDir(db_sync_path) == 0) {
+        std::vector<shannon::ColumnFamilyHandle*> handles =
+                        db_->GetColumnFamilyHandlesByType(path);
+        shannon::DB* db = db_->GetDBByType(path);
+        int index = 0;
+        for (auto handle : handles) {
+          stringstream sst_file_name;
+          sst_file_name<<handle->GetName()<<"_"<<index++;
+          shannon::Iterator* iterator = db->NewIterator(read_options, handle);
+          if (iterator == NULL) {
+            LOG(WARNING)<<"Rsync Failed! Create Iterator Failed!";
+            return;
+          }
+          iterator->SeekToFirst();
+          if (iterator->Valid()) {
+            while (db->BuildSstFile(db_path.data(),
+                   const_cast<char*>(sst_file_name.str().data()),
+                   handle, iterator, g_pika_conf->build_sst_file_size()).ok()) {
+              std::string file_name = sst_file_name.str() + "000001";
+              {
+                slash::MutexLock l(&bgrsync_mutex_);
+                bgrsync_filenames_.push(db_path + "/" + file_name+"__PATH__"+path);
+              }
+              // all sst file size less than 1G
+              while ((bgrsync_filenames_.size() + 1) *
+                     g_pika_conf->build_sst_file_size() >= 1024*1024*1024) {
+                usleep(10000);
+              }
+              sst_file_name.clear();
+              sst_file_name.str("");
+              sst_file_name<<handle->GetName()<<"_"<<index++;
+            }
+          }
+          delete iterator;
+        }
+      }
+    }
+  }
+  in_rsync_ = false;
 }
 
 void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
@@ -797,21 +877,8 @@ void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
     binlog_filenum = bgsave_info_.filenum;
     binlog_offset = bgsave_info_.offset;
   }
-  // Get all files need to send
-  std::vector<std::string> descendant;
-  int ret = 0;
-  LOG(INFO) << "Start Send files in " << bg_path << " to " << ip;
-  ret = slash::GetChildren(bg_path, descendant);
-  if (ret != 0) {
-    std::string ip_port = slash::IpPortString(ip, port);
-    slash::MutexLock ldb(&db_sync_protector_);
-    db_sync_slaves_.erase(ip_port);
-    LOG(WARNING) << "Get child directory when try to do sync failed, error: " << strerror(ret);
-    return;
-  }
-
   // Iterate to send files
-  ret = 0;
+  int ret = 0;
   std::string local_path, target_path;
   pink::PinkCli *cli = pink::NewRedisCli();
   std::string lip(host_);
@@ -823,62 +890,71 @@ void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
     cli->Close();
   }
   std::string module = kDBSyncModule + "_" + slash::IpPortString(lip, port_);
-  std::vector<std::string>::iterator it = descendant.begin();
   slash::RsyncRemote remote(ip, port, module, g_pika_conf->db_sync_speed() * 1024);
-  for (; it != descendant.end(); ++it) {
-    local_path = bg_path + "/" + *it;
-    target_path = *it;
-
-    if (target_path == kBgsaveInfoFile) {
-      continue;
+  int file_count = 0;
+  while (in_rsync_ || file_count > 0) {
+    {
+        slash::MutexLock l(&bgrsync_mutex_);
+        file_count = bgrsync_filenames_.size();
     }
-
-    if (slash::IsDir(local_path) == 0 &&
-        local_path.back() != '/') {
-      local_path.push_back('/');
-      target_path.push_back('/');
-    }
-
-    // We need specify the speed limit for every single file
-    std::cout<<"--------------------------------------------------- start"<<std::endl;
-    std::cout<<"local_path:"<<local_path<<" remote_path:"<<target_path<<std::endl;
-    ret = slash::RsyncSendFile(local_path, target_path, remote);
-    std::cout<<"--------------------------------------------------- end"<<std::endl;
-
-    if (0 != ret) {
-      LOG(WARNING) << "rsync send file failed! From: " << *it
-        << ", To: " << target_path
-        << ", At: " << ip << ":" << port
-        << ", Error: " << ret;
-      break;
+    if (file_count > 0) {
+      std::string file_name;
+      std::string path;
+      // parse file_name and path
+      // remove top element from the queue
+      {
+          slash::MutexLock l(&bgrsync_mutex_);
+          std::string file = bgrsync_filenames_.front();
+          int pos;
+          if ((pos = file.find("__PATH__")) >= 0) {
+            file_name = file.substr(0, pos);
+            path = file.substr(pos + 8, file.size()-pos+8);
+          }
+          bgrsync_filenames_.pop();
+      }
+      ret = slash::RsyncSendFile(file_name + ".sst", path, remote);
+      if (ret != 0) {
+        LOG(WARNING) << "RysncSendFile Failed! file:"<<file_name;
+      }
+      // mkdir file_name dir
+      std::ofstream fix;
+      std::string fn = file_name + ".scm";
+      fix.open(fn, std::ios::out | std::ios::in | std::ios::trunc);
+      if (fix.is_open()) {
+        fix << "completion";
+        fix.close();
+      }
+      ret = slash::RsyncSendFile(fn, path, remote);
+      if (ret != 0) {
+        LOG(WARNING) << "RysncSendFile Failed! file:"<<fn;
+      }
+      slash::DeleteFile(file_name + ".sst");
+      slash::DeleteFile(fn);
+    } else {
+      usleep(1000);
     }
   }
-
   // Clear target path
-  slash::RsyncSendClearTarget(bg_path + "/strings", "strings", remote);
-  slash::RsyncSendClearTarget(bg_path + "/hashes", "hashes", remote);
-  slash::RsyncSendClearTarget(bg_path + "/lists", "lists", remote);
-  slash::RsyncSendClearTarget(bg_path + "/sets", "sets", remote);
-  slash::RsyncSendClearTarget(bg_path + "/zsets", "zsets", remote);
+  // slash::RsyncSendClearTarget(bg_path + "/strings", "strings", remote);
+  // slash::RsyncSendClearTarget(bg_path + "/hashes", "hashes", remote);
+  // slash::RsyncSendClearTarget(bg_path + "/lists", "lists", remote);
+  // slash::RsyncSendClearTarget(bg_path + "/sets", "sets", remote);
+  // slash::RsyncSendClearTarget(bg_path + "/zsets", "zsets", remote);
 
   // Send info file at last
   if (0 == ret) {
     // need to modify the IP addr in the info file
-    if (lip.compare(host_) != 0) {
-      std::ofstream fix;
-      std::string fn = bg_path + "/" + kBgsaveInfoFile + "." + std::to_string(time(NULL));
-      fix.open(fn, std::ios::in | std::ios::trunc);
-      if (fix.is_open()) {
-        fix << "0s\n" << lip << "\n" << port_ << "\n" << binlog_filenum << "\n" << binlog_offset << "\n";
-        fix.close();
-      }
-      ret = slash::RsyncSendFile(fn, kBgsaveInfoFile, remote);
-      slash::DeleteFile(fn);
-      if (ret != 0) {
-        LOG(WARNING) << "send modified info file failed";
-      }
-    } else if (0 != (ret = slash::RsyncSendFile(bg_path + "/" + kBgsaveInfoFile, kBgsaveInfoFile, remote))) {
-      LOG(WARNING) << "send info file failed";
+    std::ofstream fix;
+    std::string fn = bg_path + "/" + kBgsaveInfoFile + "." + std::to_string(time(NULL));
+    fix.open(fn, std::ios::in | std::ios::trunc);
+    if (fix.is_open()) {
+      fix << "0s\n" << lip << "\n" << port_ << "\n" << binlog_filenum << "\n" << binlog_offset << "\n";
+      fix.close();
+    }
+    ret = slash::RsyncSendFile(fn, kBgsaveInfoFile, remote);
+    slash::DeleteFile(fn);
+    if (ret != 0) {
+      LOG(WARNING) << "send modified info file failed";
     }
   }
 
@@ -895,7 +971,7 @@ void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
     if ((g_pika_conf->double_master_ip() == ip || host() == ip)
         && (g_pika_conf->double_master_port() + 3000) == port) {
       // Update Recv Info
-      logger_->SetDoubleRecvInfo(binlog_filenum, binlog_offset);
+      logger_->SetDoubleRecvInfo(binlog_offset);
       LOG(INFO) << "Update recv info filenum: " << binlog_filenum << " offset: " << binlog_offset;
     }
   }
@@ -908,43 +984,33 @@ Status PikaServer::AddBinlogSender(const std::string& ip, int64_t port,
                                    int64_t sid,
                                    uint32_t filenum, uint64_t con_offset) {
   // Sanity check
-  if (con_offset > logger_->file_size()) {
-    return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
-  }
-  uint32_t cur_filenum = 0;
+  // if (con_offset > logger_->file_size()) {
+  //  return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
+  // }
   uint64_t cur_offset = 0;
-  logger_->GetProducerStatus(&cur_filenum, &cur_offset);
-  if (filenum != UINT32_MAX &&
-      (cur_filenum < filenum || (cur_filenum == filenum && cur_offset < con_offset))) {
+  logger_->GetProducerStatus(&cur_offset);
+  if (cur_offset < con_offset) {
     return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
   }
 
   if (filenum == UINT32_MAX) {
     LOG(INFO) << "Maybe force full sync";
   }
-  // Create and set sender
-  // slash::SequentialFile *readfile;
-  // std::string confile = NewFileName(logger_->filename, filenum);
-  /*if (!slash::FileExists(confile)) {
-    std::cout<<"file exists after!"<<std::endl;
-    // Not found binlog specified by filenum
-    // If in double-master mode, return error status
+
+  // SlaveItem not exist
+  shannon::LogIterator* log_iter = NULL;
+  // SlaveItem not exist
+  Status s = logger_->GetNewLogIterator(con_offset, &log_iter);
+  if (!s.ok()) {
     if (DoubleMasterMode() && IsDoubleMaster(ip, port) && filenum != UINT32_MAX) {
       return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
     }
-    std::cout<<"double master mode after!"<<std::endl;
-
-    TryDBSync(ip, port + 3000, cur_filenum);
+    TryDBSync(ip, port + 3000, cur_offset);
     return Status::Incomplete("Bgsaving and DBSync first");
   }
-  if (!slash::NewSequentialFile(confile, &readfile).ok()) {
-    return Status::IOError("AddBinlogSender new sequtialfile");
-  }*/
 
-  // PikaBinlogSenderThread* sender = new PikaBinlogSenderThread(ip,
-  //    port + 1000, sid, readfile, filenum, con_offset);
-  PikaBinlogSenderThread* sender = new PikaBinlogSenderThread(ip,
-          port + 1000, sid, logger_->db_, logger_->handles_, filenum, con_offset);
+  PikaBinlogSenderThread* sender = new PikaBinlogSenderThread(ip, port + 1000,
+          sid, con_offset, log_iter);
 
   if (sender->trim() == 0 // Error binlog
       && SetSlaveSender(ip, port, sender)) { // SlaveItem not exist
@@ -995,10 +1061,10 @@ bool PikaServer::InitBgsaveEngine() {
     RWLock l(&rwlock_, true);
     {
       slash::MutexLock l(&bgsave_protector_);
-      logger_->GetProducerStatus(&bgsave_info_.filenum, &bgsave_info_.offset);
+      logger_->GetProducerStatus(&bgsave_info_.offset);
     }
     s = bgsave_engine_->SetBackupContent();
-    if (!s.ok()){
+    if (!s.ok()) {
       LOG(WARNING) << "set backup content failed " << s.ToString();
       return false;
     }
@@ -1111,9 +1177,8 @@ void PikaServer::DoPurgeLogs(void* arg) {
   delete (PurgeArg*)arg;
 }
 
-bool PikaServer::GetPurgeWindow(uint32_t &max) {
-  uint64_t tmp;
-  logger_->GetProducerStatus(&max, &tmp);
+bool PikaServer::GetPurgeWindow(uint64_t &max) {
+  logger_->GetProducerStatus(&max);
   slash::MutexLock l(&slave_mutex_);
   std::vector<SlaveItem>::iterator it;
   for (it = slaves_.begin(); it != slaves_.end(); ++it) {
@@ -1122,176 +1187,26 @@ bool PikaServer::GetPurgeWindow(uint32_t &max) {
       return false;
     }
     PikaBinlogSenderThread *pb = static_cast<PikaBinlogSenderThread*>((*it).sender);
-    uint32_t filenum = pb->filenum();
-    max = filenum < max ? filenum : max;
-  }
-  // remain some more
-  if (max >= 10) {
-    max -= 10;
-    return true;
-  }
-  return false;
-}
-
-bool PikaServer::CouldPurge(uint32_t index) {
-  uint32_t pro_num;
-  uint64_t tmp;
-  logger_->GetProducerStatus(&pro_num, &tmp);
-
-  index += 10; //remain some more
-  if (index > pro_num) {
-    return false;
-  }
-  slash::MutexLock l(&slave_mutex_);
-  std::vector<SlaveItem>::iterator it;
-  for (it = slaves_.begin(); it != slaves_.end(); ++it) {
-    if ((*it).sender == NULL) {
-      // One Binlog Sender has not yet created, no purge
-      return false;
-    }
-    PikaBinlogSenderThread *pb = static_cast<PikaBinlogSenderThread*>((*it).sender);
-    uint32_t filenum = pb->filenum();
-    if (index > filenum) {   // slaves
-      return false;
-    }
+    uint64_t con_offset = pb->con_offset();
+    max = con_offset < max ? con_offset : max;
   }
   return true;
 }
 
-shannon::Status PikaServer::DeleteBinlogFile(uint32_t pro_num)
-{
-    std::vector<shannon::Iterator*> iterators;
-    shannon::Status s = logger_->db_->NewIterators(shannon::ReadOptions(),
-            logger_->handles_, &iterators);
-    if (!s.ok()) {
-        return s;
-    }
-    if (iterators.size() != 2) {
-        for (auto iter : iterators) {
-            delete iter;
-        }
-        return shannon::Status::OK();
-    }
-    char key[4];
-    blackwidow::EncodeBigFixed32(key, pro_num);
-    shannon::Slice seek_key(key, sizeof(uint32_t));
-    shannon::Iterator* iter = iterators[1];
-    shannon::WriteBatch write_batch;
-    for (iter->Seek(seek_key);
-         iter->Valid();
-         iter->Next()) {
-        shannon::Slice get_key = iter->key();
-        if (!get_key.starts_with(seek_key)) {
-            break;
-        }
-        write_batch.Delete(logger_->handles_[1], get_key);
-        if (shannon::WriteBatchInternal::Count(&write_batch) >= 800) {
-            s = logger_->db_->Write(shannon::WriteOptions(), &write_batch);
-            if (!s.ok()) {
-                for (auto iter : iterators) {
-                    delete iter;
-                }
-                return s;
-            }
-            write_batch.Clear();
-        }
-    }
-    write_batch.Delete(logger_->handles_[0], seek_key);
-    s = logger_->db_->Write(shannon::WriteOptions(), &write_batch);
-    for (auto iter : iterators) {
-        delete iter;
-    }
+bool PikaServer::CouldPurge(uint32_t index) {
+  return true;
+}
+
+shannon::Status PikaServer::DeleteBinlogFile(uint32_t pro_num) {
+    shannon::Status s;
     return s;
 }
-bool PikaServer::PurgeFiles(uint32_t to, bool manual, bool force)
-{
-  std::map<uint32_t, std::string> binlogs;
-  uint32_t first_pro_num, last_pro_num;
-  if (!GetBinlogFiles(&first_pro_num, &last_pro_num)) {
-    LOG(WARNING) << "Could not get binlog files!";
-    return false;
-  }
 
-  int delete_num = 0;
-  int remain_expire_num = (last_pro_num - first_pro_num + 1) - g_pika_conf->expire_logs_nums();
-  int binlogs_size = (last_pro_num - first_pro_num + 1);
-  for (uint32_t i = first_pro_num; i <= last_pro_num; i ++) {
-    char key[4];
-    blackwidow::EncodeBigFixed32(key, i);
-    std::string time_value;
-    shannon::Status s = logger_->db_->Get(shannon::ReadOptions(), logger_->handles_[0],
-            shannon::Slice(key, sizeof(uint32_t)), &time_value);
-    if (!s.ok()) {
-        -- remain_expire_num;
-        continue;
-    }
-    int64_t modify_time = blackwidow::DecodeBigFixed64(time_value.data());
-    if ((manual && i <= to) || remain_expire_num > 0 || (binlogs_size > 10 &&
-        modify_time < time(NULL) - g_pika_conf->expire_logs_days() * 24 * 3600)) {
-        if (!CouldPurge(i) && !force) {
-            LOG(WARNING) << "Could not purge "<< (i) <<", since it already be used";
-            return false;
-        }
-        shannon::Status s = DeleteBinlogFile(i);
-        if (s.ok()) {
-            ++delete_num;
-            --remain_expire_num;
-        } else {
-            LOG(WARNING) << "Purge log file : " << (i) << " failed! error:" << s.ToString();
-        }
-    } else {
-        break;
-    }
-    if (delete_num) {
-        LOG(INFO) << "Success purge "<< delete_num;
-    }
-    return true;
-  }
-
-  if (delete_num) {
-    LOG(INFO) << "Success purge "<< delete_num;
-  }
+bool PikaServer::PurgeFiles(uint32_t to, bool manual, bool force) {
   return true;
 }
 
 bool PikaServer::GetBinlogFiles(uint32_t *first_pro_num, uint32_t *last_pro_num) {
-  std::vector<std::string> children;
-  // int ret = slash::GetChildren(g_pika_conf->log_path(), children);
-  shannon::Iterator* iterator = logger_->db_->NewIterator(shannon::ReadOptions(), logger_->handles_[0]);
-  uint32_t start_index = 0, end_index = 0;
-  if (iterator != NULL) {
-      iterator->SeekToFirst();
-      while (iterator->Valid()) {
-          shannon::Slice key = iterator->key();
-          if (key.size() == sizeof(uint32_t) && !key.starts_with("manifest")) {
-              start_index = blackwidow::DecodeBigFixed32(key.data());
-              break;
-          }
-          iterator->Next();
-      }
-      iterator->SeekToLast();
-      while (iterator->Valid()) {
-          shannon::Slice key = iterator->key();
-          if (key.size() == sizeof(uint32_t) && !key.starts_with("manifest")) {
-              end_index = blackwidow::DecodeBigFixed32(key.data());
-              break;
-          }
-          iterator->Prev();
-      }
-  }
-  delete iterator;
-
-  if (start_index >= end_index && end_index > 0) {
-    LOG(WARNING) << "Get all files in log path failed! error index:" << start_index;
-    return false;
-  }
-  if (start_index == end_index && start_index == 0) {
-    *first_pro_num = 1;
-    *last_pro_num = 0;
-  } else {
-    *first_pro_num = start_index;
-    *last_pro_num = end_index;
-  }
   return true;
 }
 

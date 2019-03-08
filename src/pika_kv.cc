@@ -178,7 +178,8 @@ std::string IncrCmd::ToBinlog(
   RedisAppendLen(content, value.size(), "$");
   RedisAppendContent(content, value);
 
-  return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
+  return "";
+  /*return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
                                              exec_time,
                                              std::stoi(server_id),
                                              logic_id,
@@ -186,6 +187,7 @@ std::string IncrCmd::ToBinlog(
                                              offset,
                                              content,
                                              {});
+                                             */
 }
 
 void IncrbyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -238,7 +240,8 @@ std::string IncrbyCmd::ToBinlog(
   RedisAppendLen(content, value.size(), "$");
   RedisAppendContent(content, value);
 
-  return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
+  return "";
+  /*return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
                                              exec_time,
                                              std::stoi(server_id),
                                              logic_id,
@@ -246,6 +249,7 @@ std::string IncrbyCmd::ToBinlog(
                                              offset,
                                              content,
                                              {});
+                                             */
 }
 
 void IncrbyfloatCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -299,7 +303,8 @@ std::string IncrbyfloatCmd::ToBinlog(
   RedisAppendLen(content, new_value_.size(), "$");
   RedisAppendContent(content, new_value_);
 
-  return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
+  return "";
+  /*return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
                                              exec_time,
                                              std::stoi(server_id),
                                              logic_id,
@@ -307,6 +312,7 @@ std::string IncrbyfloatCmd::ToBinlog(
                                              offset,
                                              content,
                                              {});
+                                             */
 }
 
 void DecrCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -980,7 +986,8 @@ std::string PexpireatCmd::ToBinlog(
   RedisAppendLen(content, at.size(), "$");
   RedisAppendContent(content, at);
 
-  return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
+  return "";
+  /*return PikaBinlogTransverter::BinlogEncode(BinlogType::TypeFirst,
                                              exec_time,
                                              std::stoi(server_id),
                                              logic_id,
@@ -988,6 +995,7 @@ std::string PexpireatCmd::ToBinlog(
                                              offset,
                                              content,
                                              {});
+                                             */
 }
 
 void PexpireatCmd::Do() {

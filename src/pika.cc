@@ -13,6 +13,7 @@
 #include "include/pika_conf.h"
 #include "include/pika_define.h"
 #include "include/pika_version.h"
+#include "include/rate_limiter.h"
 
 #ifdef TCMALLOC_EXTENSION
 #include <gperftools/malloc_extension.h>
@@ -21,6 +22,7 @@
 PikaConf *g_pika_conf;
 
 PikaServer* g_pika_server;
+RateLimiter* g_rate_limiter;
 
 static void version() {
     char version[32];
@@ -180,6 +182,9 @@ int main(int argc, char *argv[]) {
   PikaGlogInit();
   PikaSignalSetup();
   InitCmdInfoTable();
+
+  g_rate_limiter = new RateLimiter();
+  g_rate_limiter->init();
 
   LOG(INFO) << "Server at: " << path;
   g_pika_server = new PikaServer();

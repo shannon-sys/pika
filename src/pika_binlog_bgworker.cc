@@ -14,6 +14,9 @@ extern PikaConf* g_pika_conf;
 
 void BinlogBGWorker::DoBinlogBG(void* arg) {
   BinlogBGArg *bgarg = static_cast<BinlogBGArg*>(arg);
+  delete bgarg;
+  /*
+  BinlogBGArg *bgarg = static_cast<BinlogBGArg*>(arg);
   PikaCmdArgsType argv = *(bgarg->argv);
   BinlogItem binlog_item = *(bgarg->binlog_item);
   uint64_t my_serial = bgarg->serial;
@@ -65,28 +68,27 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
   if (!is_readonly) {
     error_happend = !g_pika_server->WaitTillBinlogBGSerial(my_serial);
     if (!error_happend) {
-      if (!g_pika_server->DoubleMasterMode()) {
-        server_id = g_pika_conf->server_id();
-      }
-      g_pika_server->logger_->Lock();
-      std::string binlog = c_ptr->ToBinlog(argv,
-                                           binlog_item.exec_time(),
-                                           server_id,
-                                           binlog_item.logic_id(),
-                                           binlog_item.filenum(),
-                                           binlog_item.offset());
-      if (!binlog.empty()) {
-        g_pika_server->logger_->Put(binlog);
-      }
-      g_pika_server->logger_->Unlock();
-      if (g_pika_server->DoubleMasterMode()) {
+      // if (!g_pika_server->DoubleMasterMode()) {
+      //  server_id = g_pika_conf->server_id();
+      // }
+      // g_pika_server->logger_->Lock();
+      // std::string binlog = c_ptr->ToBinlog(argv,
+      //                                     binlog_item.exec_time(),
+      //                                     server_id,
+      //                                     binlog_item.logic_id(),
+      //                                     binlog_item.filenum(),
+      //                                     binlog_item.offset());
+      // if (!binlog.empty()) {
+      //  g_pika_server->logger_->Put(binlog);
+      // }
+      // g_pika_server->logger_->Unlock();
+      // if (g_pika_server->DoubleMasterMode()) {
         // In double moaster mode, update binlog recv info
-        g_pika_server->logger_->SetDoubleRecvInfo(binlog_item.filenum(), binlog_item.offset());
-      }
-      g_pika_server->SignalNextBinlogBGSerial();
+      //  g_pika_server->logger_->SetDoubleRecvInfo(binlog_item.filenum(), binlog_item.offset());
+      // }
+      // g_pika_server->SignalNextBinlogBGSerial();
     }
   }
-
   if (!error_happend) {
     c_ptr->Do();
   }
@@ -104,6 +106,7 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
       LOG(ERROR) << "command: " << opt << ", start_time(s): " << start_us / 1000000 << ", duration(us): " << duration;
     }
   }
+  */
 
-  delete bgarg;
+  // delete bgarg;
 }

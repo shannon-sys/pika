@@ -8,6 +8,7 @@
 
 #include "pink/include/pink_thread.h"
 #include "pink/include/redis_cli.h"
+#include "swift/shannon_db.h"
 #include <mutex>
 #include <thread>
 
@@ -29,7 +30,10 @@ class PikaTrysyncThread : public pink::Thread {
   int64_t sid_;
   pink::PinkCli *cli_;
 
-  void ReadSstToKV(const std::string sst_name);
+  void ReadSstToKV(shannon::DB* db,
+                   std::vector<shannon::ColumnFamilyHandle*>& handles,
+                   const std::string sst_name);
+  bool IsReceiveFileCompletion(std::string&);
   bool ReceiveFiles();
   bool Send(std::string lip);
   bool RecvProc();

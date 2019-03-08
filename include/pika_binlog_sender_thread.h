@@ -13,6 +13,7 @@
 #include "slash/include/env.h"
 #include "slash/include/slash_mutex.h"
 #include "swift/shannon_db.h"
+#include "swift/log_iter.h"
 
 using slash::Status;
 using slash::Slice;
@@ -22,49 +23,49 @@ class PikaBinlogSenderThread : public pink::Thread {
 
   PikaBinlogSenderThread(const std::string &ip, int port,
                          int64_t sid,
-                         slash::SequentialFile *queue,
-                         uint32_t filenum, uint64_t con_offset);
-
-  PikaBinlogSenderThread(const std::string &ip, int port,
-                         int64_t sid,
-                         shannon::DB *db, std::vector<shannon::ColumnFamilyHandle*> handles,
-                         uint32_t filenum, uint64_t con_offset);
+                         uint64_t con_offset,
+                         shannon::LogIterator* log_iter);
 
   virtual ~PikaBinlogSenderThread();
 
-  uint32_t filenum() {
-    return filenum_;
-  }
   uint64_t con_offset() {
     return con_offset_;
   }
 
   int trim();
 
+  int speed_size() {
+    return speed_;
+  }
+
+  int speed_count() {
+    return count_;
+  }
+
+  uint64_t offset() {
+    return con_offset_;
+  }
+
  private:
   uint64_t get_next(bool &is_error);
   Status Parse(std::string &scratch);
   Status Consume(std::string &scratch);
   unsigned int ReadPhysicalRecord(slash::Slice *fragment);
+  void CalcInfo();
 
-  uint32_t filenum_;
+  int statistics_speed_, statistics_count_;
+  int speed_;
+  int count_;
+  long last_time_, cur_time_, statistics_frequency_;
+  int cmd_size_;
   uint64_t con_offset_;
-  uint64_t last_record_offset_;
-
-  slash::SequentialFile* queue_;
-  shannon::DB* db_;
-  std::vector<shannon::ColumnFamilyHandle*> handles_;
-  char* const backing_store_;
   Slice buffer_;
-  std::string s_buffer_;
-
   std::string ip_;
   int port_;
   int64_t sid_;
-
   int timeout_ms_;
+  shannon::LogIterator* log_iter_;
   pink::PinkCli *cli_;
-
   virtual void* ThreadMain();
 };
 

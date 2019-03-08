@@ -33,9 +33,7 @@ int PikaConf::Load()
   } else if (loglevel == "error") {
     SetLogLevel(1);
   } else {
-    std::cout<<"set loglevel(0)"<<std::endl;
     SetLogLevel(0);
-    std::cout<<"set loglevel(0) release!"<<std::endl;
     fprintf(stderr, "Invalid loglevel value in conf file, only INFO or ERROR\n");
     exit(-1);
   }
@@ -292,6 +290,16 @@ int PikaConf::Load()
   // lists log count
   lists_log_count_ = 0;
   GetConfInt("lists-log-count", &lists_log_count_);
+
+  // build sst  file
+  // default : 100M
+  build_sst_file_size_ = 1024 * 1024 * 100;
+  GetConfInt64("build-sst-file-size", &build_sst_file_size_);
+
+  // maximum sst size
+  // default : 512M
+  maximum_sst_file_size_ = 1024 * 1024 * 512;
+  GetConfInt64("maximum-sst-file-size", &maximum_sst_file_size_);
   return ret;
 }
 

@@ -91,6 +91,9 @@ class PikaConf : public slash::BaseConf {
   std::string pidfile()         { return pidfile_; }
   int binlog_file_size()        { return binlog_file_size_; }
 
+  // build sst file config
+  int64_t build_sst_file_size() { RWLock l(&rwlock_, false); return build_sst_file_size_; }
+
   // Setter
   void SetPort(const int value)                 { RWLock l(&rwlock_, true); port_ = value; }
   void SetThreadNum(const int value)            { RWLock l(&rwlock_, true); thread_num_ = value; }
@@ -293,6 +296,8 @@ private:
   bool optimize_filters_for_hits_;
   bool level_compaction_dynamic_level_bytes_;
   int lists_log_count_;
+  int64_t build_sst_file_size_;
+  int64_t maximum_sst_file_size_;
 
   std::string network_interface_;
 

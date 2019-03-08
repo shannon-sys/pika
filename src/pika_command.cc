@@ -174,7 +174,7 @@ void InitCmdInfoTable() {
   ////PKRScanRange
   CmdInfo* pkrscanrangeptr = new CmdInfo(kCmdNamePKRScanRange, -4, kCmdFlagsRead | kCmdFlagsKv);
   cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKRScanRange, pkrscanrangeptr));
- 
+
   //Hash
   ////HDel
   CmdInfo* hdelptr = new CmdInfo(kCmdNameHDel, -3, kCmdFlagsWrite | kCmdFlagsHash);
@@ -664,7 +664,7 @@ void InitCmdTable(std::unordered_map<std::string, Cmd*> *cmd_table) {
   ////PKHRScanRange
   CmdInfo* pkhrscanrange = new CmdInfo(kCmdNamePKHRScanRange, -4, kCmdFlagsRead | kCmdFlagsHash);
   cmd_infos.insert(std::pair<std::string, CmdInfo*>(kCmdNamePKHRScanRange, pkhrscanrange));
- 
+
   //List
   Cmd* lindexptr = new LIndexCmd();
   cmd_table->insert(std::pair<std::string, Cmd*>(kCmdNameLIndex, lindexptr));

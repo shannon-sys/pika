@@ -42,7 +42,7 @@ class PikaNewMasterConn: public pink::PinkConn {
     pink::ReadStatus ParseRedisRESPArray(const std::string& content, pink::RedisCmdArgsType* argv);
 
     bool ProcessAuth(const pink::RedisCmdArgsType& argv);
-    bool ProcessBinlogData(const pink::RedisCmdArgsType& argv, const BinlogItem& binlog_item);
+    bool ProcessBinlogData(const BinlogItem& binlog_item);
 
   private:
     char* rbuf_;

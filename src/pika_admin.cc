@@ -102,10 +102,9 @@ void SlaveofCmd::Do() {
     if (have_offset_) {
       // Before we send the trysync command, we need purge current logs older than the sync point
       if (filenum_ > 0) {
-        std::cout<<"SlaveofCmd::Do:"<<filenum_<<" -----------------------------------------------------------------"<<std::endl;
         g_pika_server->PurgeLogs(filenum_ - 1, true, true);
       }
-      g_pika_server->logger_->SetProducerStatus(filenum_, pro_offset_);
+      // g_pika_server->logger_->SetProducerStatus(filenum_, pro_offset_);
     }
   } else {
     if (is_noone_) {
@@ -182,7 +181,6 @@ void TrysyncCmd::Do() {
     Status status = g_pika_server->AddBinlogSender(slave_ip_, slave_port_,
                                                    sid,
                                                    filenum_, pro_offset_);
-    status = Status::OK();
     if (status.ok()) {
       res_.AppendInteger(sid);
       LOG(INFO) << "Send Sid to Slave: " << sid;
@@ -791,7 +789,7 @@ void InfoCmd::InfoDoubleMaster(std::string &info) {
   tmp_stream << "repl_state: " << (g_pika_server->repl_state()) << "\r\n";
   uint64_t double_recv_offset;
   uint32_t double_recv_num;
-  g_pika_server->logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
+  // g_pika_server->logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
   tmp_stream << "double_master_recv_info: filenum " << double_recv_num << " offset " << double_recv_offset << "\r\n";
 
   info.append(tmp_stream.str());
@@ -829,17 +827,17 @@ void InfoCmd::InfoKeyspace(std::string &info) {
 void InfoCmd::InfoLog(std::string &info) {
   std::stringstream  tmp_stream;
   tmp_stream << "# Log" << "\r\n";
-  uint32_t purge_max;
+  uint64_t purge_max;
   int64_t log_size = slash::Du(g_pika_conf->log_path());
   tmp_stream << "log_size:" << log_size << "\r\n";
   tmp_stream << "log_size_human:" << (log_size >> 20) << "M\r\n";
   tmp_stream << "safety_purge:" << (g_pika_server->GetPurgeWindow(purge_max) ?
-      kBinlogPrefix + std::to_string(static_cast<int32_t>(purge_max)) : "none") << "\r\n";
+      kBinlogPrefix + std::to_string(static_cast<int64_t>(purge_max)) : "none") << "\r\n";
   tmp_stream << "expire_logs_days:" << g_pika_conf->expire_logs_days() << "\r\n";
   tmp_stream << "expire_logs_nums:" << g_pika_conf->expire_logs_nums() << "\r\n";
   uint32_t filenum;
   uint64_t offset;
-  g_pika_server->logger_->GetProducerStatus(&filenum, &offset);
+  // g_pika_server->logger_->GetProducerStatus(&filenum, &offset);
   tmp_stream << "binlog_offset:" << filenum << " " << offset << "\r\n";
 
   info.append(tmp_stream.str());
