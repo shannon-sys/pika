@@ -305,11 +305,13 @@ class PikaServer {
   struct KeyScanInfo {
     time_t start_time;
     std::string s_start_time;
+    int32_t duration;
     std::vector<blackwidow::KeyInfo> key_infos; //the order is kv, hash, list, zset, set
     bool key_scaning_;
     KeyScanInfo() :
         start_time(0),
         s_start_time("1970-01-01 08:00:00"),
+        duration(-1),
         key_infos({{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}),
         key_scaning_(false) {
     }
