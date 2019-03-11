@@ -1758,7 +1758,9 @@ void TcmallocCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info
     return;
   }
   rate_ = 0;
-  std::string type = slash::StringToLower(argv[1]);
+  // std::string type = slash::StringToLower(argv[1]);
+  std::string tmp = argv[1];
+  std::string type = slash::StringToLower(temp);
   if (type == "stats") {
     type_ = 0;
   } else if (type == "rate") {
