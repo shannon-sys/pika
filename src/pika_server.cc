@@ -790,7 +790,7 @@ void PikaServer::DBSync(const std::string& ip, int port) {
   DBSyncArg *arg = new DBSyncArg(this, ip, port);
   DBSyncArg *arg2 = new DBSyncArg(this, ip, port);
   bgsave_thread_.Schedule(&DoDBSync, static_cast<void*>(arg));
-  bgrsync_thread_.Schedule(&DoDBSync, static_cast<void*>(arg2));
+  bgrsync_thread_.Schedule(&DoBuildSSTFile, static_cast<void*>(arg2));
 }
 
 void PikaServer::DoBuildSSTFile(void *arg) {
