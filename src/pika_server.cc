@@ -806,7 +806,7 @@ void PikaServer::DoDBSync(void* arg) {
   DBSyncArg *ppurge = static_cast<DBSyncArg*>(arg);
   PikaServer* ps = ppurge->p;
 
-  ps->DBSyncBuildSSTFile(ppurge->ip, ppurge->port);
+  ps->DBSyncSendFile(ppurge->ip, ppurge->port);
 
   delete (PurgeArg*)arg;
 }
