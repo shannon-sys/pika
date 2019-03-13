@@ -826,7 +826,7 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
     shannon::ReadOptions read_options;
     for (auto path : paths) {
       std::string db_path = db_sync_path + "/" + path;
-      if (slash::FileExists(db_path) || slash::CreateDir(db_sync_path) == 0) {
+      if (slash::FileExists(db_path) || slash::CreateDir(db_path) == 0) {
         std::vector<shannon::ColumnFamilyHandle*> handles =
                         db_->GetColumnFamilyHandlesByType(path);
         shannon::DB* db = db_->GetDBByType(path);
