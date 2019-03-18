@@ -28,6 +28,7 @@
 #include "slash/include/slash_mutex.h"
 #include "pink/include/bg_thread.h"
 #include "pink/include/pink_pubsub.h"
+#include "pink/include/thread_pool.h"
 #include "blackwidow/blackwidow.h"
 #include "blackwidow/backupable.h"
 #include "swift/shannon_db.h"
@@ -215,6 +216,11 @@ class PikaServer {
    * Blackwidow options init
    */
   void shannonOptionInit(blackwidow::BlackwidowOptions* bw_option);
+
+  /*
+   * ThreadPool process task
+   */
+  void Schedule(pink::TaskFunc func, void* arg);
 
   /*
    * Binlog
@@ -420,6 +426,7 @@ class PikaServer {
 
   int worker_num_;
   PikaDispatchThread* pika_dispatch_thread_;
+  pink::ThreadPool* pika_thread_pool_;
 
   PikaBinlogReceiverThread* pika_binlog_receiver_thread_;
   PikaHeartbeatThread* pika_heartbeat_thread_;

@@ -98,6 +98,7 @@ PikaServer::PikaServer() :
   pika_trysync_thread_ = new PikaTrysyncThread();
   monitor_thread_ = new PikaMonitorThread();
   pika_pubsub_thread_ = new pink::PubSubThread();
+  pika_thread_pool_ = new pink::ThreadPool(8, 100000);
 
   //for (int j = 0; j < g_pika_conf->binlogbg_thread_num; j++) {
   for (int j = 0; j < g_pika_conf->sync_thread_num(); j++) {
@@ -117,6 +118,7 @@ PikaServer::PikaServer() :
 
 PikaServer::~PikaServer() {
   delete bgsave_engine_;
+  delete pika_thread_pool_;
 
   // DispatchThread will use queue of worker thread,
   // so we need to delete dispatch before worker.
@@ -159,6 +161,10 @@ PikaServer::~PikaServer() {
   pthread_rwlock_destroy(&slowlog_protector_);
 
   LOG(INFO) << "PikaServer " << pthread_self() << " exit!!!";
+}
+
+void PikaServer::Schedule(pink::TaskFunc func, void* arg) {
+  pika_thread_pool_->Schedule(func, arg);
 }
 
 bool PikaServer::ServerInit() {
@@ -274,6 +280,12 @@ void PikaServer::shannonOptionInit(blackwidow::BlackwidowOptions* bw_option) {
 
 void PikaServer::Start() {
   int ret = 0;
+  ret = pika_thread_pool_->start_thread_pool();
+  if (ret != pink::kSuccess) {
+    delete logger_;
+    db_.reset();
+    LOG(FATAL) << "Start ThreadPool Error: " << ret << (ret == pink::kCreateThreadError ? ": create thread error " : ": other error");
+  }
   ret = pika_dispatch_thread_->StartThread();
   if (ret != pink::kSuccess) {
     delete logger_;

@@ -14,6 +14,7 @@
 #include "include/pika_define.h"
 #include "include/pika_version.h"
 #include "include/rate_limiter.h"
+#include "include/pika_cmd_table_manager.h"
 
 #ifdef TCMALLOC_EXTENSION
 #include <gperftools/malloc_extension.h>
@@ -22,6 +23,9 @@
 PikaConf *g_pika_conf;
 
 PikaServer* g_pika_server;
+
+PikaCmdTableManager* g_pika_cmd_table_manager;
+
 RateLimiter* g_rate_limiter;
 
 static void version() {
@@ -188,6 +192,7 @@ int main(int argc, char *argv[]) {
 
   LOG(INFO) << "Server at: " << path;
   g_pika_server = new PikaServer();
+  g_pika_cmd_table_manager = new PikaCmdTableManager();
 
   if (g_pika_conf->daemonize()) {
     close_std();
@@ -200,6 +205,7 @@ int main(int argc, char *argv[]) {
   }
 
   delete g_pika_server;
+  delete g_pika_cmd_table_manager;
   DestoryCmdInfoTable();
   ::google::ShutdownGoogleLogging();
   delete g_pika_conf;
