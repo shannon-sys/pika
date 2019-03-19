@@ -22,8 +22,8 @@ PikaMasterConn::PikaMasterConn(int fd, std::string ip_port,
     reinterpret_cast<PikaBinlogReceiverThread*>(worker_specific_data);
 }
 
-int PikaMasterConn::DealMessage(
-    PikaCmdArgsType& argv, std::string* response) {
+int PikaMasterConn::DealMessage(const PikaCmdArgsType& argv,
+                                std::string* response) {
   //no reply
   //eq set_is_reply(false);
   /* if (argv.empty()) {
