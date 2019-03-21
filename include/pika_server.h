@@ -562,6 +562,9 @@ class PikaServer {
   static void DoKeyScan(void *arg);
   void InitKeyScan();
 
+  bool IsSlave();
+  bool IsSlaveInStart();
+
   PikaServer(PikaServer &ps);
   void operator =(const PikaServer &ps);
 };

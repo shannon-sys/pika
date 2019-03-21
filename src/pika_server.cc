@@ -67,6 +67,7 @@ PikaServer::PikaServer() :
   //Create blackwidow handle
   blackwidow::BlackwidowOptions bw_option;
   shannonOptionInit(&bw_option);
+  bw_option.is_slave = IsSlaveInStart();
 
   std::string db_path = g_pika_conf->db_path();
   LOG(INFO) << "Prepare Blackwidow DB...";
@@ -247,6 +248,27 @@ bool PikaServer::ServerInit() {
 
 }
 
+bool PikaServer::IsSlave() {
+  if (!((role_ & PIKA_ROLE_SLAVE) ^ PIKA_ROLE_SLAVE)) {  // Is a slave
+    return true;
+  }
+  return false;
+}
+
+bool PikaServer::IsSlaveInStart() {
+  std::string slaveof = g_pika_conf->slaveof();
+  if (!slaveof.empty()) {
+    int32_t sep = slaveof.find(":");
+    std::string master_ip = slveof.substr(0, sep);
+    int32_t master_port = std::stoi(slaveof.substr(sep+1));
+    if ((master_ip == "127.0.0.1" || master_ip == host_) && master_port == port) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 void PikaServer::shannonOptionInit(blackwidow::BlackwidowOptions* bw_option) {
   bw_option->options.create_if_missing = true;
   bw_option->options.keep_log_file_num = 10;
@@ -276,6 +298,7 @@ void PikaServer::shannonOptionInit(blackwidow::BlackwidowOptions* bw_option) {
   bw_option->share_block_cache = g_pika_conf->share_block_cache();
   bw_option->statistics_max_size = g_pika_conf->max_cache_statistic_keys();
   bw_option->small_compaction_threshold = g_pika_conf->small_compaction_threshold();
+  bw_options->is_slave = IsSlave();
 }
 
 void PikaServer::Start() {
