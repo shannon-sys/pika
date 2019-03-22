@@ -259,9 +259,9 @@ bool PikaServer::IsSlaveInStart() {
   std::string slaveof = g_pika_conf->slaveof();
   if (!slaveof.empty()) {
     int32_t sep = slaveof.find(":");
-    std::string master_ip = slveof.substr(0, sep);
+    std::string master_ip = slaveof.substr(0, sep);
     int32_t master_port = std::stoi(slaveof.substr(sep+1));
-    if ((master_ip == "127.0.0.1" || master_ip == host_) && master_port == port) {
+    if ((master_ip == "127.0.0.1" || master_ip == host_) && master_port == port_) {
       return false;
     }
     return true;
@@ -298,7 +298,7 @@ void PikaServer::shannonOptionInit(blackwidow::BlackwidowOptions* bw_option) {
   bw_option->share_block_cache = g_pika_conf->share_block_cache();
   bw_option->statistics_max_size = g_pika_conf->max_cache_statistic_keys();
   bw_option->small_compaction_threshold = g_pika_conf->small_compaction_threshold();
-  bw_options->is_slave = IsSlave();
+  bw_option->is_slave = IsSlave();
 }
 
 void PikaServer::Start() {
