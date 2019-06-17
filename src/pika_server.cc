@@ -292,8 +292,8 @@ void PikaServer::shannonOptionInit(blackwidow::BlackwidowOptions* bw_option) {
     bw_option->options.compression = shannon::CompressionType::kZlibCompression;
   }
 
-  bw_option->table_options.block_size = g_pika_conf->block_size();
-  bw_option->table_options.cache_index_and_filter_blocks = g_pika_conf->cache_index_and_filter_blocks();
+  // bw_option->table_options.block_size = g_pika_conf->block_size();
+  // bw_option->table_options.cache_index_and_filter_blocks = g_pika_conf->cache_index_and_filter_blocks();
   bw_option->block_cache_size = g_pika_conf->block_cache();
   bw_option->share_block_cache = g_pika_conf->share_block_cache();
   bw_option->statistics_max_size = g_pika_conf->max_cache_statistic_keys();
