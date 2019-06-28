@@ -7,3 +7,6 @@
 [submodule "third/kv_libc++"]
 	path = third/kv_libc++
 	url = https://github.com/shannondb/kv_libcpp.git
+[submodule "third/slash"]
+	path = third/slash
+	url = https://github.com/shannon-sys/slash.git
