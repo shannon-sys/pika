@@ -1443,7 +1443,7 @@ bool PikaServer::FlushAll() {
   shannon::DestroyDB("/dev/kvdev0", dbpath + "hashes", shannon::Options());
   shannon::DestroyDB("/dev/kvdev0", dbpath + "sets", shannon::Options());
   shannon::DestroyDB("/dev/kvdev0", dbpath + "zsets", shannon::Options());
-  shannon::DestroyDB("/dev/kvdev0", "delkeys", shannon::Options());
+  shannon::DestroyDB("/dev/kvdev0", dbpath + "delkeys", shannon::Options());
   //Create blackwidow handle
   blackwidow::BlackwidowOptions bw_option;
   shannonOptionInit(&bw_option);
