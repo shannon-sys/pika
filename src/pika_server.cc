@@ -1438,7 +1438,7 @@ bool PikaServer::FlushAll() {
   if (dbpath[dbpath.length() - 1] != '_') {
       dbpath.append("_");
   }
-  shannon::DestroyDB("/dev/kvdev0", dbpath + "string", shannon::Options());
+  shannon::DestroyDB("/dev/kvdev0", dbpath + "strings", shannon::Options());
   shannon::DestroyDB("/dev/kvdev0", dbpath + "lists", shannon::Options());
   shannon::DestroyDB("/dev/kvdev0", dbpath + "hashes", shannon::Options());
   shannon::DestroyDB("/dev/kvdev0", dbpath + "sets", shannon::Options());
