@@ -244,7 +244,7 @@ void HMgetCmd::Do() {
   if (s.ok() || s.IsNotFound()) {
     res_.AppendArrayLen(vss.size());
     for (const auto& vs : vss) {
-      if (!vs.status.ok()) {
+      if (vs.status.ok()) {
         res_.AppendStringLen(vs.value.size());
         res_.AppendContent(vs.value);
       } else {
