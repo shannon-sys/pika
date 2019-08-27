@@ -119,11 +119,13 @@ PikaServer::PikaServer() :
 
 PikaServer::~PikaServer() {
   delete bgsave_engine_;
-  delete pika_thread_pool_;
 
+  // fix bug coredump when pika exit
   // DispatchThread will use queue of worker thread,
   // so we need to delete dispatch before worker.
+  pika_thread_pool_ ->stop_thread_pool();
   delete pika_dispatch_thread_;
+  delete pika_thread_pool_;
 
   {
   slash::MutexLock l(&slave_mutex_);
