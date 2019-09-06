@@ -120,7 +120,7 @@ LDFLAGS += $(LIB_PATH) \
 			 		 -lpink$(DEBUG_SUFFIX) \
 			 		 -lslash$(DEBUG_SUFFIX) \
 					 -lblackwidow$(DEBUG_SUFFIX) \
-					 -lshannondb_cxx$(DEBUG_SUFFIX) \
+					 -Wl,-Bstatic -lshannondb_cxx -Wl,-Bdynamic \
 					 -lglog
 					 #-lrocksdb$(DEBUG_SUFFIX) 
 
@@ -221,6 +221,7 @@ $(BINARY): $(SLASH) $(SHANNONDB) $(PINK) $(BLACKWIDOW) $(GLOG) $(LIBOBJECTS)
 	$(AM_V_at)mv $@ $(OUTPUT)/bin
 	$(AM_V_at)cp -r $(CURDIR)/conf $(OUTPUT)
 	
+.PHONY: $(SLASH) $(SHANNONDB) $(PINK) $(BLACKWIDOW)
 
 $(SHANNONDB):
 	$(AM_V_at)make -C $(SHANNONDB_PATH)
@@ -236,7 +237,6 @@ $(PINK):
 $(BLACKWIDOW):
 	# $(AM_V_at)make -C $(BLACKWIDOW_PATH) SHANNONDB_PATH=$(SHANNONDB_PATH) ROCKSDB_PATH=$(ROCKSDB_PATH) SLASH_PATH=$(SLASH_PATH) DEBUG_LEVEL=$(DEBUG_LEVEL)
 	$(AM_V at)make -C $(BLACKWIDOW_PATH) SHANNONDB_PATH=$(SHANNONDB_PATH) SLASH_PATH=$(SLASH_PATH) DEBUG_LEVEL=$(DEBUG_LEVEL)
-	
 
 $(GLOG):
 	cd $(THIRD_PATH)/glog; if [ ! -f ./Makefile ]; then ./configure --disable-shared; fi; make; echo '*' > $(CURDIR)/third/glog/.gitignore;
@@ -253,6 +253,6 @@ distclean: clean
 	make -C $(PINK_PATH)/pink/ SLASH_PATH=$(SLASH_PATH) clean
 	make -C $(SLASH_PATH)/slash/ clean
 	make -C $(BLACKWIDOW_PATH)/ clean
-	make -C $(ROCKSDB_PATH)/ clean
+	#make -C $(ROCKSDB_PATH)/ clean
 	make -C $(SHANNONDB_PATH)/ clean
 #	make -C $(GLOG_PATH)/ clean
