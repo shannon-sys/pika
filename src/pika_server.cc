@@ -804,6 +804,7 @@ void PikaServer::TryDBSync(const std::string& ip, int port, uint64_t top) {
   {
     slash::MutexLock l(&bgsave_protector_);
     bg_path = bgsave_info_.path;
+    bgsave_info_.offset = top;
   }
 
   DBSync(ip, port);

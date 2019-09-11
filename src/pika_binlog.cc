@@ -157,13 +157,10 @@ Status Binlog::Put(const BinlogItem& item) {
 
 Status Binlog::SetProducerStatus(uint64_t offset) {
   slash::MutexLock l(&mutex_);
-  // offset smaller than the first header
-  offset_ = offset;
-  {
-    slash::RWLock(&(version_->rwlock_), true);
-    version_->offset_ = offset;
-    version_->StableSave();
+  shannon::Status s = shannon::SetSequenceNumber(default_device_name_, offset);
+  if (s.ok()) {
+    return Status::OK();
   }
-  return Status::OK();
+  return Status::InvalidArgument("offset error!");
 }
 
