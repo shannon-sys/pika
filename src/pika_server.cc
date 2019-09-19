@@ -861,9 +861,29 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
   std::string db_sync_path = g_pika_conf->db_sync_path();
   LOG(INFO) << "Start Send files in " << db_sync_path << " to " << ip;
   if (slash::FileExists(db_sync_path) || slash::CreateDir(db_sync_path) == 0) {
+    // create snapshot
+    std::vector<shannon::DB*> dbs;
+    std::vector<const shannon::Snapshot*> snapshots;
+    {
+      for (auto path : paths) {
+        shannon::DB* db = db_->GetDBByType(path);
+        assert(db != NULL);
+        const shannon::Snapshot* snapshot = db->GetSnapshot();
+        assert(snapshot != NULL);
+        dbs.push_back(db);
+        snapshots.push_back(snapshot);
+      }
+    }
+    // Get max snapshot's timestamp
+    // It save current snapshot's timestamp when full sync completion send it to the slave
+    if (snapshots.size() > 0) {
+      bgsave_info_.offset = snapshots[snapshots.size() - 1]->GetSequenceNumber();
+    }
     shannon::ReadOptions read_options;
-    for (auto path : paths) {
+    for (int i = 0; i < paths.size(); i ++) {
+      std::string path = paths[i];
       std::string db_path = db_sync_path + "/" + path;
+      read_options.snapshot = snapshots[i];
       if (slash::FileExists(db_path) || slash::CreateDir(db_path) == 0) {
         std::vector<shannon::ColumnFamilyHandle*> handles =
                         db_->GetColumnFamilyHandlesByType(path);
@@ -875,6 +895,10 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
           shannon::Iterator* iterator = db->NewIterator(read_options, handle);
           if (iterator == NULL) {
             LOG(WARNING)<<"Rsync Failed! Create Iterator Failed!";
+            // Release snapshot of all
+            for (int i = 0; i < dbs.size(); i ++) {
+              dbs[i]->ReleaseSnapshot(snapshots[i]);
+            }
             return;
           }
           iterator->SeekToFirst();
@@ -900,6 +924,9 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
           delete iterator;
         }
       }
+    }
+    for (int i = 0; i < dbs.size(); i ++) {
+      dbs[i]->ReleaseSnapshot(snapshots[i]);
     }
   }
   in_rsync_ = false;
