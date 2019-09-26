@@ -880,7 +880,7 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
       bgsave_info_.offset = snapshots[snapshots.size() - 1]->GetSequenceNumber();
     }
     shannon::ReadOptions read_options;
-    for (int i = 0; i < paths.size(); i ++) {
+    for (unsigned int i = 0; i < paths.size(); i ++) {
       std::string path = paths[i];
       std::string db_path = db_sync_path + "/" + path;
       read_options.snapshot = snapshots[i];
@@ -896,7 +896,7 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
           if (iterator == NULL) {
             LOG(WARNING)<<"Rsync Failed! Create Iterator Failed!";
             // Release snapshot of all
-            for (int i = 0; i < dbs.size(); i ++) {
+            for (unsigned int i = 0; i < dbs.size(); i ++) {
               dbs[i]->ReleaseSnapshot(snapshots[i]);
             }
             return;
@@ -925,7 +925,7 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
         }
       }
     }
-    for (int i = 0; i < dbs.size(); i ++) {
+    for (unsigned int i = 0; i < dbs.size(); i ++) {
       dbs[i]->ReleaseSnapshot(snapshots[i]);
     }
   }
