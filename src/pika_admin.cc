@@ -384,28 +384,40 @@ void FlushdbCmd::DoInitial(const PikaCmdArgsType &argv, const CmdInfo* const ptr
     res_.SetRes(CmdRes::kWrongNum, kCmdNameFlushdb);
     return;
   }
-  std::string struct_type = argv[1];
-  if (!strcasecmp(struct_type.data(), "string")) {
-    db_name_ = "strings";
-  } else if (!strcasecmp(struct_type.data(), "hash")) {
-    db_name_ = "hashes";
-  } else if (!strcasecmp(struct_type.data(), "set")) {
-    db_name_ = "sets";
-  } else if (!strcasecmp(struct_type.data(), "zset")) {
-    db_name_ = "zsets";
-  } else if (!strcasecmp(struct_type.data(), "list")) {
-    db_name_ = "lists";
+  if (argv.size() == 1) {
+    db_name_ = "all";
   } else {
-    res_.SetRes(CmdRes::kInvalidDbType);
+    std::string struct_type = argv[1];
+    if (!strcasecmp(struct_type.data(), "string")) {
+      db_name_ = "strings";
+    } else if (!strcasecmp(struct_type.data(), "hash")) {
+      db_name_ = "hashes";
+    } else if (!strcasecmp(struct_type.data(), "set")) {
+      db_name_ = "sets";
+    } else if (!strcasecmp(struct_type.data(), "zset")) {
+      db_name_ = "zsets";
+    } else if (!strcasecmp(struct_type.data(), "list")) {
+      db_name_ = "lists";
+    } else {
+      res_.SetRes(CmdRes::kInvalidDbType);
+    }
   }
 }
 
 void FlushdbCmd::Do() {
   g_pika_server->RWLockWriter();
-  if (g_pika_server->FlushDb(db_name_)) {
-    res_.SetRes(CmdRes::kOk);
+  if (db_name_ == "all") {
+    if (g_pika_server->FlushAll()) {
+      res_.SetRes(CmdRes::kOk);
+    } else {
+      res_.SetRes(CmdRes::kErrOther, "Theere are some bgthread using db now, can not flushdb");
+    }
   } else {
-    res_.SetRes(CmdRes::kErrOther, "There are some bgthread using db now, can not flushdb");
+    if (g_pika_server->FlushDb(db_name_)) {
+      res_.SetRes(CmdRes::kOk);
+    } else {
+      res_.SetRes(CmdRes::kErrOther, "There are some bgthread using db now, can not flushdb");
+    }
   }
   g_pika_server->RWUnlock();
 }
