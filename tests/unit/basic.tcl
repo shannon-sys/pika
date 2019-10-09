@@ -1,8 +1,10 @@
 start_server {tags {"basic"}} {
+    if 0 {
     test {DEL all keys to start with a clean DB} {
         foreach key [r keys *] {r del $key}
         r dbsize
     } {0}
+    }
 
     test {SET and GET an item} {
         r set x foobar
@@ -37,9 +39,11 @@ start_server {tags {"basic"}} {
         lsort [r keys *]
     } {foo_a foo_b foo_c key_x key_y key_z}
 
+    if 0 {
     test {DBSIZE} {
         r dbsize
     } {6}
+    }
 
     test {DEL all keys} {
         foreach key [r keys *] {r del $key}
@@ -90,9 +94,11 @@ start_server {tags {"basic"}} {
             set _ $err
         } {}
 
+        if 0 {
         test {DBSIZE should be 10101 now} {
             r dbsize
         } {10101}
+        }
     }
 
     test {INCR against non existing key} {
@@ -120,6 +126,7 @@ start_server {tags {"basic"}} {
         r incrby novar 17179869184
     } {34359738368}
 
+    if 0 {
     test {INCR fails against key with spaces (left)} {
         r set novar "    11"
         catch {r incr novar} err
@@ -144,6 +151,7 @@ start_server {tags {"basic"}} {
         r rpop mylist
         format $err
     } {WRONGTYPE*}
+    }
 
     test {DECRBY over 32bit value with over 32bit increment, negative res} {
         r set novar 17179869184
@@ -173,12 +181,14 @@ start_server {tags {"basic"}} {
         r incrbyfloat novar 17179869184
     } {34359738368}
 
+    if 0 {
     test {INCRBYFLOAT fails against key with spaces (left)} {
         set err {}
         r set novar "    11"
         catch {r incrbyfloat novar 1.0} err
         format $err
     } {ERR*valid*}
+    }
 
     test {INCRBYFLOAT fails against key with spaces (right)} {
         set err {}
@@ -194,6 +204,7 @@ start_server {tags {"basic"}} {
         format $err
     } {ERR*valid*}
 
+    if 0 {
     test {INCRBYFLOAT fails against a key holding a list} {
         r del mylist
         set err {}
@@ -212,6 +223,7 @@ start_server {tags {"basic"}} {
         # there is no way to increment / decrement by infinity nor to
         # perform divisions.
     } {ERR*would produce*}
+    }
 
     test {INCRBYFLOAT decrement} {
         r set foo 1
@@ -548,11 +560,12 @@ start_server {tags {"basic"}} {
         assert_equal 1 [r setbit mykey 2 0]
         assert_equal [binary format B* 00010011] [r get mykey]
     }
-
+    if 0 {
     test "SETBIT against key with wrong type" {
         r del mykey
         r lpush mykey "foo"
         assert_error "WRONGTYPE*" {r setbit mykey 0 1}
+    }
     }
 
     test "SETBIT with out of range bit offset" {
@@ -569,6 +582,7 @@ start_server {tags {"basic"}} {
         assert_error "*out of range*" {r setbit mykey 0 20}
     }
 
+    if 0 {
     test "SETBIT fuzzing" {
         set str ""
         set len [expr 256*8]
@@ -585,6 +599,7 @@ start_server {tags {"basic"}} {
             r setbit mykey $bitnum $bitval
             assert_equal [binary format B* $str] [r get mykey]
         }
+    }
     }
 
     test "GETBIT against non-existing key" {
@@ -624,6 +639,7 @@ start_server {tags {"basic"}} {
         assert_equal 0 [r getbit mykey 10000]
     }
 
+    if 0 {
     test "SETRANGE against non-existing key" {
         r del mykey
         assert_equal 3 [r setrange mykey 0 foo]
@@ -656,7 +672,6 @@ start_server {tags {"basic"}} {
         assert_equal "foo\000bar" [r get mykey]
     }
 
-    if 0 {
     test "SETRANGE against integer-encoded key" {
         r set mykey 1234
         assert_encoding int mykey
@@ -683,7 +698,6 @@ start_server {tags {"basic"}} {
         assert_encoding raw mykey
         assert_equal "1234\0002" [r get mykey]
     }
-    }
 
     test "SETRANGE against key with wrong type" {
         r del mykey
@@ -698,6 +712,7 @@ start_server {tags {"basic"}} {
         r set mykey "hello"
         assert_error "*out of range*" {r setrange mykey -1 world}
         assert_error "*maximum allowed size*" {r setrange mykey [expr 512*1024*1024-4] world}
+    }
     }
 
     test "GETRANGE against non-existing key" {
