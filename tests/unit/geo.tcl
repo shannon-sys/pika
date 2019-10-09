@@ -208,6 +208,7 @@ start_server {tags {"geo"}} {
         assert {[lindex $res 3] < 167}
     }
 
+    if 0 {
     test {GEORANGE STOREDIST option: COUNT ASC and DESC} {
         r del points
         r geoadd points 13.361389 38.115556 "Palermo" \
@@ -222,7 +223,7 @@ start_server {tags {"geo"}} {
         set res [r zrange points2 0 -1 withscores]
         assert {[lindex $res 0] eq "Catania"}
     }
-
+    }
     test {GEOADD + GEORANGE randomized test} {
         set attempt 30
         while {[incr attempt -1]} {
@@ -254,7 +255,7 @@ start_server {tags {"geo"}} {
             lappend debuginfo "Search area: $search_lon,$search_lat $radius_km km"
             set tcl_result {}
             set argv {}
-            for {set j 0} {$j < 20000} {incr j} {
+            for {set j 0} {$j < 300} {incr j} {
                 geo_random_point lon lat
                 lappend argv $lon $lat "place:$j"
                 set distance [geo_distance $lon $lat $search_lon $search_lat]

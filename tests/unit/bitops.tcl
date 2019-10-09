@@ -189,6 +189,7 @@ start_server {tags {"bitops"}} {
         r get dest
     } {2}
 
+    if 0 {
     test {BITOP with non string source key} {
         r del c
         r set a 1
@@ -197,13 +198,14 @@ start_server {tags {"bitops"}} {
         catch {r bitop xor dest a b c d} e
         set e
     } {WRONGTYPE*}
+    }
 
     test {BITOP with empty string after non empty string (issue #529)} {
         r flushdb
         r set a "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         r bitop or x a b
     } {32}
-
+    if 0 {
     test {BITPOS bit=0 with empty key returns 0} {
         r del str
         r bitpos str 0
@@ -213,6 +215,7 @@ start_server {tags {"bitops"}} {
         r del str
         r bitpos str 1
     } {-1}
+    }
 
     test {BITPOS bit=0 with string less than 1 word works} {
         r set str "\xff\xf0\x00"
@@ -300,6 +303,7 @@ start_server {tags {"bitops"}} {
         assert {[r bitpos str 1 1 1] == 8}
     }
 
+    if 0 {
     test {BITPOS bit=0 changes behavior if end is given} {
         r set str "\xff\xff\xff"
         assert {[r bitpos str 0] == 24}
@@ -337,5 +341,6 @@ start_server {tags {"bitops"}} {
                 set first_zero_pos $pos
             }
         }
+    }
     }
 }

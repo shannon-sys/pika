@@ -138,7 +138,7 @@ start_server {tags {"hll"}} {
 
     test {PFCOUNT multiple-keys merge returns cardinality of union} {
         r del hll1 hll2 hll3
-        for {set x 1} {$x < 100000} {incr x} {
+        for {set x 1} {$x < 100} {incr x} {
             # Force dense representation of hll2
             r pfadd hll1 "foo-$x"
             r pfadd hll2 "bar-$x"
@@ -159,7 +159,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]
@@ -170,7 +170,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]
@@ -181,7 +181,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]
@@ -192,7 +192,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]
@@ -203,7 +203,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]
@@ -214,7 +214,7 @@ start_server {tags {"hll"}} {
 	    	set card [r pfcount hll1]
             	set realcard [expr {$x*1}]
             	set err [expr {abs($card-$realcard)}]
-	    	
+
 		set d_err [expr {$err * 1.0}]
 		set d_realcard [expr {$realcard * 1.0}]
 	    	set err_precentage [expr {double($d_err / $d_realcard)}]

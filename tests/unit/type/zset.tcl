@@ -62,7 +62,7 @@ start_server {tags {"zset"}} {
             catch {r zadd myzset 10 a 20 b 30.badscore c} e
             assert_match {*ERR*not*float*} $e
             #r exists myzset
-        } 
+        }
 
         test {ZADD - Variadic version will raise error on missing arg} {
             r del myzset
@@ -594,14 +594,14 @@ start_server {tags {"zset"}} {
         r del one two dest
         set cmd1 [list r zadd one]
         set cmd2 [list r zadd two]
-        for {set j 0} {$j < 1000} {incr j} {
+        for {set j 0} {$j < 200} {incr j} {
             lappend cmd1 [expr rand()] [randomInt 1000]
             lappend cmd2 [expr rand()] [randomInt 1000]
         }
         {*}$cmd1
         {*}$cmd2
-        assert {[r zcard one] > 100}
-        assert {[r zcard two] > 100}
+        assert {[r zcard one] > 20}
+        assert {[r zcard two] > 20}
         r zunionstore dest 2 one two
         set oldscore 0
         foreach {ele score} [r zrange dest 0 -1 withscores] {

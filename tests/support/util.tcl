@@ -140,8 +140,8 @@ proc randomKey {} {
         randpath {randomInt 1000000000000}
     } {
         # Random string
-        randpath {randstring 1 256 alpha} \
-                {randstring 1 256 compr}
+        randpath {randstring 1 100 alpha} \
+                {randstring 1 100 compr}
     }
 }
 
