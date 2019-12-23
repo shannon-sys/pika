@@ -271,6 +271,7 @@ bool PikaNewMasterConn::ProcessBinlogData(const BinlogItem& binlog_item) {
   /*
    * 这段代码暂时还有用
    * 主要功能是再redis client上显示增量同步获取到的命令
+   */
   // Monitor related
   std::string monitor_message;
   if (g_pika_server->HasMonitorClients()) {
@@ -281,7 +282,6 @@ bool PikaNewMasterConn::ProcessBinlogData(const BinlogItem& binlog_item) {
     }
     g_pika_server->AddMonitorMessage(monitor_message);
   }
-  */
 
   bool is_readonly = g_pika_server->readonly();
 
@@ -292,19 +292,24 @@ bool PikaNewMasterConn::ProcessBinlogData(const BinlogItem& binlog_item) {
     if (!g_pika_server->WaitTillBinlogBGSerial(serial)) {
       return false;
     }
-    // std::string opt = argv[0];
-    // Cmd* c_ptr = binlog_receiver_->GetCmd(slash::StringToLower(opt));
+    std::string opt = argv[0];
+    Cmd* c_ptr = binlog_receiver_->GetCmd(slash::StringToLower(opt));
 
     g_pika_server->logger_->Lock();
-    g_pika_server->logger_->Put(binlog_item);
+    g_pika_server->logger_->Put(c_ptr->ToBinlog(argv,
+                                                binlog_item.exec_time(),
+                                                std::to_string(binlog_item.server_id()),
+                                                binlog_item.logic_id(),
+                                                binlog_item.filenum(),
+                                                binlog_item.offset()));
     g_pika_server->logger_->Unlock();
     g_pika_server->SignalNextBinlogBGSerial();
   }
 
-  // PikaCmdArgsType *v = new PikaCmdArgsType(argv);
-  // BinlogItem *b = new BinlogItem(binlog_item);
-  // std::string dispatch_key = argv.size() >= 2 ? argv[1] : argv[0];
-  // g_pika_server->DispatchBinlogBG(dispatch_key, v, b, serial, is_readonly);
+  PikaCmdArgsType *v = new PikaCmdArgsType(argv);
+  BinlogItem *b = new BinlogItem(binlog_item);
+  std::string dispatch_key = argv.size() >= 2 ? argv[1] : argv[0];
+  g_pika_server->DispatchBinlogBG(dispatch_key, v, b, serial, is_readonly);
   return true;
 }
 

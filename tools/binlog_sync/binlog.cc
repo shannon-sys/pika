@@ -242,7 +242,7 @@ Status Binlog::Put(const char* item, int len) {
 
   return s;
 }
- 
+
 Status Binlog::EmitPhysicalRecord(RecordType t, const char *ptr, size_t n, int *temp_pro_offset) {
     Status s;
     assert(n <= 0xffffff);
@@ -321,7 +321,7 @@ Status Binlog::Produce(const Slice &item, int *temp_pro_offset) {
 
   return s;
 }
- 
+
 Status Binlog::AppendBlank(slash::WritableFile *file, uint64_t len) {
   if (len < kHeaderSize) {
     return Status::OK();

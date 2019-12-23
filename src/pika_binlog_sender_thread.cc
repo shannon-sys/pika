@@ -20,50 +20,143 @@
 
 extern PikaServer* g_pika_server;
 extern RateLimiter* g_rate_limiter;
+extern void EncodeBigFixed32(char* buf, int32_t n);
+extern void EncodeBigFixed64(char* buf, int64_t n);
 
 PikaBinlogSenderThread::PikaBinlogSenderThread(const std::string &ip, int port,
                                                int64_t sid,
-                                               uint64_t con_offset,
-                                               shannon::LogIterator* log_iter)
+                                               shannon::DB* db,
+                                               uint32_t filenum,
+                                               uint64_t con_offset)
     :
-      statistics_speed_(0),
-      statistics_count_(0),
-      speed_(0),
-      count_(0),
-      last_time_(0),
-      cur_time_(0),
-      statistics_frequency_(400000),
-      cmd_size_(0),
+      filenum_(filenum),
       con_offset_(con_offset),
+      db_(db),
+      backing_store_(new char[kBlockSize]),
       buffer_(),
       ip_(ip),
       port_(port),
       sid_(sid),
-      timeout_ms_(35000),
-      log_iter_(log_iter) {
+      timeout_ms_(35000) {
   cli_ = pink::NewRedisCli();
-  port_ = port;
+  last_record_offset_ = con_offset % kBlockSize;
   set_thread_name("BinlogSender");
 }
 
 PikaBinlogSenderThread::~PikaBinlogSenderThread() {
   StopThread();
-  delete log_iter_;
   delete cli_;
+  delete[] backing_store_;
   // delete queue_;
   LOG(INFO) << "a BinlogSender thread " << thread_id() << " exit!";
 }
 
 int PikaBinlogSenderThread::trim() {
+  slash::Status s;
+  uint64_t start_block = (con_offset_ / kBlockSize) * kBlockSize;
+  uint64_t block_offset = con_offset_ % kBlockSize;
+  uint64_t ret = 0;
+  uint64_t res = 0;
+  bool is_error = false;
+
+  while (true) {
+    if (res >= block_offset) {
+      con_offset_ = start_block + res;
+      break;
+    }
+    ret = get_next(is_error);
+    if (is_error == true) {
+      return -1;
+    }
+    res += ret;
+  }
+  last_record_offset_ = con_offset_ % kBlockSize;
   return 0;
 }
 
 uint64_t PikaBinlogSenderThread::get_next(bool &is_error) {
-  return 0;
+  uint64_t offset = 0;
+  slash::Status s;
+  shannon::Status status;
+  is_error = false;
+  char key[8];
+
+  while (true) {
+    EncodeBigFixed32(key, filenum_);
+    EncodeBigFixed64(key + 4, static_cast<uint32_t>(con_offset_));
+    status = db_->Get(shannon::ReadOptions(), shannon::Slice(key, 8), &s_buffer_);
+    if (!status.ok()) {
+      is_error = true;
+    }
+
+    const char* header = s_buffer_.data();
+    const uint32_t a = static_cast<uint32_t>(header[0]) & 0xff;
+    const uint32_t b = static_cast<uint32_t>(header[1]) & 0xff;
+    const uint32_t c = static_cast<uint32_t>(header[2]) & 0xff;
+    const unsigned int type = header[7];
+    const uint32_t length = a | (b << 8) | (c << 16);
+
+    if (type == kFullType) {
+      buffer_ = Slice(s_buffer_.data() + 8, s_buffer_.size() - 8);
+      offset += kHeaderSize + length;
+      break;
+    } else if (type == kFirstType) {
+      buffer_ = Slice(s_buffer_.data() + 8, s_buffer_.size() - 8);
+      offset += kHeaderSize + length;
+      break;
+    } else if (type == kMiddleType) {
+      buffer_ = Slice(s_buffer_.data() + 8, s_buffer_.size() - 8);
+      offset += kHeaderSize + length;
+      break;
+    } else if (type == kLastType) {
+      buffer_ = Slice(s_buffer_.data() + 8, s_buffer_.size() - 8);
+      offset += kHeaderSize + length;
+      break;
+    } else {
+      is_error = true;
+      break;
+    }
+  }
+  return offset;
 }
 
 unsigned int PikaBinlogSenderThread::ReadPhysicalRecord(slash::Slice *result) {
-  return 0;
+  slash::Status s;
+  shannon::Status status;
+  if (kBlockSize - last_record_offset_ <= kHeaderSize) {
+    con_offset_ += (kBlockSize - last_record_offset_);
+    last_record_offset_ = 0;
+  }
+  buffer_.clear();
+  char key[8];
+  EncodeBigFixed32(key, filenum_);
+  EncodeBigFixed32(key + 4, static_cast<uint32_t>(con_offset_));
+  status = db_->Get(shannon::ReadOptions(), shannon::Slice(key, sizeof(key)), &s_buffer_);
+  if (status.IsNotFound()) {
+    return kEof;
+  } else if(!status.ok()) {
+    return kBadRecord;
+  }
+
+  const char* header = s_buffer_.data();
+  const uint32_t a = static_cast<uint32_t>(header[0]) & 0xff;
+  const uint32_t b = static_cast<uint32_t>(header[1]) & 0xff;
+  const uint32_t c = static_cast<uint32_t>(header[2]) & 0xff;
+  const unsigned int type = header[7];
+  const uint32_t length = a | (b << 8) | (c << 16);
+  if (type == kZeroType || length == 0) {
+    buffer_.clear();
+    return kOldRecord;
+  }
+
+  buffer_.clear();
+  buffer_ = Slice(s_buffer_.data() + 8, s_buffer_.size() - 8);
+  *result = slash::Slice(buffer_.data(), buffer_.size());
+  last_record_offset_ += kHeaderSize + length;
+  if (result->size() == length) {
+    con_offset_ += (kHeaderSize + length);
+  }
+  return type;
 }
 
 long get_time() {
@@ -73,45 +166,41 @@ long get_time() {
 }
 
 Status PikaBinlogSenderThread::Consume(std::string &scratch) {
-  log_iter_->Next();
-  if (log_iter_->Valid()) {
-    shannon::Slice key = log_iter_->key();
-    if (!log_iter_->status().ok()) {
-      return Status::IOError("");
-    }
-    shannon::Slice value = log_iter_->value();
-    if (!log_iter_->status().ok()) {
-      return Status::IOError("");
-    }
-    shannon::LogOpType op_type = log_iter_->optype();
-    uint64_t timestamp = log_iter_->timestamp();
+  Status s;
 
-    int32_t db_index = log_iter_->db();
-    int32_t cf_index = log_iter_->cf();
-    shannon::DB* db = g_pika_server->logger_->db_->GetDBByIndex(db_index);
-    if (db == NULL) {
-      stringstream ss;
-      ss<<"db:"<<db_index<<" not exists";
-      return Status::IOError(ss.str());
+  slash::Slice fragment;
+  while (true) {
+    const unsigned int record_type = ReadPhysicalRecord(&fragment);
+
+    switch (record_type) {
+      case kFullType:
+        scratch = std::string(fragment.data(), fragment.size());
+        s = Status::OK();
+        break;
+      case kFirstType:
+        scratch.assign(fragment.data(), fragment.size());
+        s = Status::NotFound("Middle Status");
+        break;
+      case kMiddleType:
+        scratch.append(fragment.data(), fragment.size());
+        s = Status::NotFound("Middle Status");
+        break;
+      case kLastType:
+        scratch.append(fragment.data(), fragment.size());
+        s = Status::OK();
+        break;
+      case kEof:
+        return Status::EndFile("Eof");
+      case kBadRecord:
+        return Status::IOError("Data Corruption");
+      case kOldRecord:
+        return Status::EndFile("Eof");
+      default:
+        return Status::IOError("Unknow reason");
     }
-    shannon::Slice db_name(db->GetName());
-    const shannon::ColumnFamilyHandle* cf_handle = db->GetColumnFamilyHandle(cf_index);
-    if (cf_handle == NULL) {
-      stringstream ss;
-      ss<<"cf:"<<cf_index<<" not exists";
-      return Status::IOError(ss.str());
+    if (s.ok()) {
+      break;
     }
-    shannon::Slice cf_name(cf_handle->GetName());
-    scratch = PikaBinlogTransverter::BinlogEncode(key, value, op_type,
-                                                  timestamp,
-                                                  db_name,
-                                                  cf_name);
-    con_offset_ ++;
-    cmd_size_ = key.size() + value.size();
-  } else if (log_iter_->status().IsCorruption()) {
-    return Status::Corruption(log_iter_->status().ToString());
-  } else {
-    return Status::IOError("valid failed");
   }
   return Status::OK();
 }
@@ -121,12 +210,13 @@ Status PikaBinlogSenderThread::Consume(std::string &scratch) {
 Status PikaBinlogSenderThread::Parse(std::string &scratch) {
   scratch.clear();
   Status s;
-  uint64_t pro_offset = 0;
+  uint32_t pro_num;
+  uint64_t pro_offset;
 
   Binlog* logger = g_pika_server->logger_;
   while (!should_stop()) {
-    logger->GetProducerStatus(&pro_offset);
-    if (con_offset_ == pro_offset) {
+    logger->GetProducerStatus(&pro_num, &pro_offset);
+    if (filenum_ == pro_num && con_offset_ == pro_offset) {
       DLOG(INFO) << "BinlogSender Parse no new msg, con_offset " << con_offset_;
       usleep(10000);
       continue;
@@ -134,6 +224,22 @@ Status PikaBinlogSenderThread::Parse(std::string &scratch) {
 
     //DLOG(INFO) << "BinlogSender start Parse a msg filenum_" << filenum_ << ", con_offset " << con_offset_;
     s = Consume(scratch);
+
+    if (s.IsEndFile()) {
+      char key[8];
+      std::string value;
+      EncodeBigFixed32(key, filenum_ + 1);
+      EncodeBigFixed32(key + 4, static_cast<uint32_t>(0));
+      shannon::Status status = db_->Get(shannon::ReadOptions(), shannon::Slice(key, 8), &value);
+      if (status.ok()) {
+        DLOG(INFO) << "BinlogSender roll to new binlog" << (filenum_);
+        filenum_ ++;
+        con_offset_ = 0;
+        last_record_offset_ = 0;
+      } else {
+        usleep(10000);
+      }
+    }
     if (s.ok()) {
       break;
     }
@@ -145,16 +251,6 @@ Status PikaBinlogSenderThread::Parse(std::string &scratch) {
   return s;
 }
 
-void PikaBinlogSenderThread::CalcInfo() {
-  cur_time_ = get_time();
-  if (cur_time_ >= last_time_ + statistics_frequency_) {
-    speed_ = statistics_speed_ * 1000000.0 / statistics_frequency_;
-    count_ = statistics_count_ * 1000000.0 / statistics_frequency_;
-    last_time_ = cur_time_;
-    statistics_speed_ = 0;
-    statistics_count_ = 0;
-  }
-}
 // When we encount
 void* PikaBinlogSenderThread::ThreadMain() {
   Status s, result;
@@ -203,16 +299,16 @@ void* PikaBinlogSenderThread::ThreadMain() {
 
         /* 这个地方是用来判断该条binlog信息是否是属于另一个主机的，如果属于，
          * 那么就不发送该条信息 */
-        /*BinlogItem binlog_item;
+        BinlogItem binlog_item;
         PikaBinlogTransverter::BinlogDecode(BinlogType::TypeFirst,
                                             scratch,
                                             &binlog_item);
-        If this binlog from the peer-master, can not resend to the peer-master
+        // If this binlog from the peer-master, can not resend to the peer-master
         if (binlog_item.server_id() == g_pika_server->DoubleMasterSid()
           && ip_ == g_pika_server->master_ip()
           && port_ == (g_pika_server->master_port() + 1000)) {
           continue;
-        }*/
+        }
 
         // 4. After successful parse, we send msg;
         header.clear();
@@ -222,12 +318,6 @@ void* PikaBinlogSenderThread::ThreadMain() {
         result = cli_->Send(&transfer);
         if (result.ok()) {
           last_send_flag = true;
-          statistics_speed_ += transfer.size();
-          statistics_count_ += 1;
-          CalcInfo();
-          if (g_pika_server->GetSlowestSlaveSid() == sid_) {
-            g_rate_limiter->acquire(cmd_size_);
-          }
         } else {
           last_send_flag = false;
           LOG(WARNING) << "BinlogSender send slave(" << ip_ << ":" << port_ << ") failed,  " << result.ToString();

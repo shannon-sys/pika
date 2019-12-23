@@ -32,43 +32,54 @@ class Version;
 
 class Binlog {
  public:
-  Binlog();
+  Binlog(const std::string& device_path, const std::string& binlog_path, const int file_sizse = 100 * 1024 * 1024);
   ~Binlog();
 
   void Lock()         { mutex_.Lock(); }
   void Unlock()       { mutex_.Unlock(); }
 
-  Status Put(const BinlogItem& item);
+  Status Put(const std::string &item);
+  Status Put(const char* item, int len);
 
 
-  Status GetProducerStatus(uint64_t* pro_offset, uint64_t* logic_id = NULL);
+  Status GetProducerStatus(uint32_t* filenum, uint64_t* pro_offset, uint64_t* logic_id = NULL);
   /*
    * Set Producer pro_num and pro_offset with lock
    */
-  Status SetProducerStatus(uint64_t offset);
+  Status SetProducerStatus(uint32_t filenum, uint64_t offset);
 
   // Double master used
-  Status GetDoubleRecvInfo(uint64_t* double_offset);
+  Status GetDoubleRecvInfo(uint32_t* double_filenum, uint64_t* double_offset);
 
-  Status SetDoubleRecvInfo(uint64_t double_offset);
+  Status SetDoubleRecvInfo(uint32_t double_filenum, uint64_t double_offset);
 
-  Status GetNewLogIterator(uint64_t offset, shannon::LogIterator** log_iter);
-
-  void AddDB(shannon::DB* db) {
-    dbs_.push_back(db);
+  uint64_t file_size() {
+    return file_size_;
   }
-  std::shared_ptr<blackwidow::BlackWidow> db_;
+  void InitLogFile();
+
  private:
+  Status EmitPhysicalRecord(RecordType t, const char *ptr, size_t n, int *temp_pro_offset);
+  Status Produce(const Slice &item, int *pro_offset);
+  shannon::DB *db_;
+  shannon::WriteOptions default_write_options_;
+  uint32_t consumer_num_;
+  uint64_t item_num_;
+
   Version* version_;
+  uint32_t queue_file_size_;
 
   slash::Mutex mutex_;
-  std::string default_device_name_ = "/dev/kvdev0";
+  std::string device_path_;
   std::string binlog_path_;
 
-  uint64_t offset_;
-  uint64_t double_offset_;
+  uint32_t pro_num_;
+  int block_offset_;
 
-  std::vector<shannon::DB*> dbs_;
+  char* pool_;
+  bool exit_all_consume_;
+  uint64_t file_size_;
+
   // No copying allowed
   Binlog(const Binlog&);
   void operator=(const Binlog&);
@@ -76,7 +87,7 @@ class Binlog {
 
 class Version {
  public:
-  Version(shannon::DB* db, std::vector<shannon::ColumnFamilyHandle*> handle);
+  Version(shannon::DB* db);
   Version();
   ~Version();
 
@@ -84,8 +95,9 @@ class Version {
 
   // RWLock should be held when access members.
   Status StableSave();
-
-  uint64_t offset_;
+  shannon::DB* db_;
+  uint32_t pro_num_;
+  uint64_t pro_offset_;
   uint64_t logic_id_;
 
   // Double master used
@@ -95,7 +107,7 @@ class Version {
 
   void debug() {
     slash::RWLock(&rwlock_, false);
-    printf ("Current offset %lu\n", offset_);
+    printf ("Current pro_num %u pro_offset %lu\n", pro_num_, pro_offset_);
   }
 
  private:
