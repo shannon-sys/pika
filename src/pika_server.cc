@@ -472,6 +472,7 @@ bool PikaServer::ChangeDb(const std::string& new_path) {
   RWLock l(&rwlock_, true);
   LOG(INFO) << "Prepare change db from: " << tmp_path;
   db_.reset();
+  logger_->db_.reset();
   if (0 != slash::RenameFile(db_path.c_str(), tmp_path)) {
     LOG(WARNING) << "Failed to rename db path when change db, error: " << strerror(errno);
     return false;
@@ -1462,6 +1463,7 @@ bool PikaServer::FlushAll() {
   }
 
   LOG(INFO) << "Delete old db...";
+  logger_->db_.reset();
   db_.reset();
 
   std::string dbpath = g_pika_conf->db_path();
@@ -1484,6 +1486,7 @@ bool PikaServer::FlushAll() {
   shannon::Status s = db_->Open(bw_option, g_pika_conf->db_path());
   assert(db_);
   assert(s.ok());
+  logger_->db_ = db_;
   LOG(INFO) << "open new db success";
   return true;
 }
@@ -1503,6 +1506,7 @@ bool PikaServer::FlushDb(const std::string& db_name) {
   }
 
   LOG(INFO) << "Delete old " + db_name + " db...";
+  logger_->db_.reset();
   db_.reset();
 
   std::string dbpath = g_pika_conf->db_path();
@@ -1521,6 +1525,7 @@ bool PikaServer::FlushDb(const std::string& db_name) {
   shannon::Status s = db_->Open(bw_option, g_pika_conf->db_path());
   assert(db_);
   assert(s.ok());
+  logger_->db_ = db_;
   LOG(INFO) << "open new " + db_name + " db success";
   return true;
 }
