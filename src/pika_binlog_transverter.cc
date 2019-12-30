@@ -86,11 +86,11 @@ uint64_t BinlogItem::timestamp() const {
   return timestamp_;
 }
 
-const std::string& BinlogItem::db() const {
+int32_t BinlogItem::db() const {
   return db_;
 }
 
-const std::string& BinlogItem::cf() const {
+int32_t BinlogItem::cf() const {
   return cf_;
 }
 
@@ -110,11 +110,11 @@ void BinlogItem::set_timestamp(uint64_t timestamp) {
   timestamp_ = timestamp;
 }
 
-void BinlogItem::set_db(std::string db) {
+void BinlogItem::set_db(int32_t db) {
   db_ = db;
 }
 
-void BinlogItem::set_cf(std::string cf) {
+void BinlogItem::set_cf(int32_t cf) {
   cf_ = cf;
 }
 
@@ -124,8 +124,8 @@ std::string BinlogItem::ToString() const {
   str.append(",value: " + value_);
   str.append(",optype: " + std::to_string(optype_));
   str.append(",timestamp: " + std::to_string(timestamp_));
-  str.append(",db: " + db_);
-  str.append(",cf: " + cf_);
+  str.append(",db: " + std::to_string(db_));
+  str.append(",cf: " + std::to_string(cf_));
   return str;
 }
 
@@ -133,17 +133,15 @@ std::string PikaBinlogTransverter::BinlogEncode(shannon::Slice& key,
                                                 shannon::Slice& value,
                                                 shannon::LogOpType optype,
                                                 uint64_t timestamp,
-                                                shannon::Slice& db_name,
-                                                shannon::Slice& cf_name) {
+                                                int32_t db_index,
+                                                int32_t cf_index) {
   std::string str;
   size_t key_size = key.size();
   size_t value_size = value.size();
-  size_t db_name_size = db_name.size();
-  size_t cf_name_size = cf_name.size();
   size_t offset = 0;
 
   str.resize(2 * sizeof(size_t) + key.size() + value.size() + sizeof(optype) +
-             sizeof(timestamp) + 2 * sizeof(size_t) + db_name_size + cf_name_size);
+             sizeof(timestamp) + 2 * sizeof(int32_t));
   char *data = const_cast<char*>(str.data());
   memcpy(data + offset, &key_size, sizeof(key_size));
   offset += sizeof(size_t);
@@ -157,14 +155,10 @@ std::string PikaBinlogTransverter::BinlogEncode(shannon::Slice& key,
   offset += sizeof(optype);
   memcpy(data + offset, &timestamp, sizeof(timestamp));
   offset += sizeof(timestamp);
-  memcpy(data + offset, &db_name_size, sizeof(db_name_size));
-  offset += sizeof(size_t);
-  memcpy(data + offset, &cf_name_size, sizeof(cf_name_size));
-  offset += sizeof(size_t);
-  memcpy(data + offset, db_name.data(), db_name.size());
-  offset += db_name.size();
-  memcpy(data + offset, cf_name.data(), cf_name.size());
-  offset += cf_name.size();
+  memcpy(data + offset, &db_index, sizeof(db_index));
+  offset += sizeof(int32_t);
+  memcpy(data + offset, &cf_index, sizeof(cf_index));
+  offset += sizeof(int32_t);
   return str;
 }
 
@@ -173,7 +167,7 @@ bool PikaBinlogTransverter::BinlogDecode(BinlogItem* binlog_item,
   std::string key, value;
   shannon::LogOpType optype;
   uint64_t timestamp;
-  std::string db, cf;
+  int32_t db, cf;
   bool flag = BinlogDecode(&key, &value, &optype, &timestamp, &db, &cf, str);
   if (flag) {
     binlog_item->set_key(key);
@@ -190,12 +184,12 @@ bool PikaBinlogTransverter::BinlogDecode(std::string* key,
                                          std::string* value,
                                          shannon::LogOpType* optype,
                                          uint64_t* timestamp,
-                                         std::string* db_name,
-                                         std::string* cf_name,
+                                         int32_t* db_index,
+                                         int32_t* cf_index,
                                          std::string& str) {
-  size_t key_size, value_size, db_name_size, cf_name_size;
+  size_t key_size, value_size;
   size_t offset = 0;
-  if (str.size() <= (sizeof(size_t) * 4 + sizeof(shannon::LogOpType) +
+  if (str.size() <= (sizeof(size_t) * 2 + sizeof(int32_t) * 2 + sizeof(shannon::LogOpType) +
                      sizeof(uint64_t))) {
     return false;
   }
@@ -217,19 +211,9 @@ bool PikaBinlogTransverter::BinlogDecode(std::string* key,
   offset += sizeof(shannon::LogOpType);
   memcpy(timestamp, str.data() + offset, sizeof(uint64_t));
   offset += sizeof(uint64_t);
-  memcpy(&db_name_size, str.data() + offset, sizeof(size_t));
-  offset += sizeof(size_t);
-  memcpy(&cf_name_size, str.data() + offset, sizeof(size_t));
-  offset += sizeof(size_t);
-  if (db_name != NULL) {
-    db_name->clear();
-    db_name->assign(str.data() + offset, db_name_size);
-  }
-  offset += db_name_size;
-  if (cf_name != NULL) {
-    cf_name->clear();
-    cf_name->assign(str.data() + offset, cf_name_size);
-  }
-  offset += cf_name_size;
+  memcpy(db_index, str.data() + offset, sizeof(int32_t));
+  offset += sizeof(int32_t);
+  memcpy(cf_index, str.data() + offset, sizeof(int32_t));
+  offset += sizeof(int32_t);
   return true;
 }

@@ -175,6 +175,32 @@ void TrysyncCmd::DoInitial(const PikaCmdArgsType &argv, const CmdInfo* const ptr
   }
 }
 
+void TrysyncCmd::StructDBMAPString(std::string& str) {
+  str.append(blackwidow::STRINGS_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::STRINGS_DB)->GetIndex()));
+  str.append(" ");
+  str.append(blackwidow::HASHES_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::HASHES_DB)->GetIndex()));
+  str.append(" ");
+  str.append(blackwidow::SETS_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::SETS_DB)->GetIndex()));
+  str.append(" ");
+  str.append(blackwidow::LISTS_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::LISTS_DB)->GetIndex()));
+  str.append(" ");
+  str.append(blackwidow::ZSETS_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::ZSETS_DB)->GetIndex()));
+  str.append(" ");
+  str.append(blackwidow::DELKEYS_DB);
+  str.append(" ");
+  str.append(std::to_string(g_pika_server->db()->GetDBByType(blackwidow::DELKEYS_DB)->GetIndex()));
+}
+
 void TrysyncCmd::Do() {
   LOG(INFO) << "Trysync, Slave ip: " << slave_ip_ << " Slave port:" << slave_port_
     << " filenum: " << filenum_ << " pro_offset: " << pro_offset_;
@@ -185,6 +211,7 @@ void TrysyncCmd::Do() {
                                                    filenum_, pro_offset_);
     if (status.ok()) {
       res_.AppendInteger(sid);
+      // res_.AppendInteger(sid);
       LOG(INFO) << "Send Sid to Slave: " << sid;
       g_pika_server->BecomeMaster();
       return;
@@ -199,7 +226,13 @@ void TrysyncCmd::Do() {
     }
 
     if (status.IsIncomplete()) {
-      res_.AppendString(kInnerReplWait);
+      std::string str;
+      str.append(kInnerReplWait);
+      str.append(" ");
+      StructDBMAPString(str);
+      res_.AppendString(str);
+
+      // res_.AppendString(kInnerReplWait);
     } else {
       LOG(WARNING) << "slave offset is larger than mine, slave ip: " << slave_ip_
         << "slave port:" << slave_port_

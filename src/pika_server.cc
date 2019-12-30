@@ -72,9 +72,10 @@ PikaServer::PikaServer() :
   std::string db_path = g_pika_conf->db_path();
   LOG(INFO) << "Prepare Blackwidow DB...";
   db_ = std::shared_ptr<blackwidow::BlackWidow>(new blackwidow::BlackWidow());
-  bw_option.lists_log_count = g_pika_conf->lists_log_count();
-  shannon::Status s = db_->Open(bw_option, db_path);
   assert(db_);
+  bw_option.lists_log_count = g_pika_conf->lists_log_count();
+  db_->set_is_slave(IsSlaveInStart());
+  shannon::Status s = db_->Open(bw_option, db_path);
   assert(s.ok());
   LOG(INFO) << "DB Success";
 
@@ -485,6 +486,7 @@ bool PikaServer::ChangeDb(const std::string& new_path) {
 
   bw_option.lists_log_count = g_pika_conf->lists_log_count();
   db_.reset(new blackwidow::BlackWidow());
+  db_->set_is_slave(IsSlaveInStart());
   shannon::Status s = db_->Open(bw_option, db_path);
   assert(db_);
   assert(s.ok());
@@ -862,6 +864,19 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
   std::string db_sync_path = g_pika_conf->db_sync_path();
   LOG(INFO) << "Start Send files in " << db_sync_path << " to " << ip;
   if (slash::FileExists(db_sync_path) || slash::CreateDir(db_sync_path) == 0) {
+    std::string slave_dir;
+    for (int i = 0; i < ip.size(); i ++) {
+      if (ip.at(i) >= '0' && ip.at(i) <= '9')
+        slave_dir.append(1, ip.at(i));
+    }
+    slave_dir.append("_");
+    slave_dir.append(std::to_string(port));
+    db_sync_path = db_sync_path + "/" + slave_dir;
+    if (!slash::FileExists(db_sync_path) && slash::CreateDir(db_sync_path) != 0) {
+      LOG(WARNING) << "Rsync Filed! Create dir failed! path:" << db_sync_path;
+      in_rsync_ = false;
+      return;
+    }
     // create snapshot
     std::vector<shannon::DB*> dbs;
     std::vector<const shannon::Snapshot*> snapshots;
@@ -900,6 +915,7 @@ void PikaServer::DBSyncBuildSSTFile(const std::string& ip, int port) {
             for (unsigned int i = 0; i < dbs.size(); i ++) {
               dbs[i]->ReleaseSnapshot(snapshots[i]);
             }
+            in_rsync_ = false;
             return;
           }
           iterator->SeekToFirst();
@@ -980,7 +996,7 @@ void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
       }
       ret = slash::RsyncSendFile(file_name + ".sst", path, remote);
       if (ret != 0) {
-        LOG(WARNING) << "RysncSendFile Failed! file:"<<file_name;
+        LOG(WARNING) << "RsyncSendFile Failed! file:"<<file_name;
       }
       // mkdir file_name dir
       std::ofstream fix;

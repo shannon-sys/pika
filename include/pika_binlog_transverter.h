@@ -36,24 +36,24 @@ class BinlogItem {
   const std::string& value()            const;
   shannon::LogOpType optype()           const;
   uint64_t timestamp()                  const;
-  const std::string& db()               const;
-  const std::string& cf()               const;
+  int32_t db()                          const;
+  int32_t cf()                          const;
   std::string ToString()                const;
 
   void set_key(std::string key);
   void set_value(std::string value);
   void set_optype(shannon::LogOpType optype);
   void set_timestamp(uint64_t timestamp);
-  void set_db(std::string db);
-  void set_cf(std::string cf);
+  void set_db(int32_t db);
+  void set_cf(int32_t cf);
 
   private:
     std::string key_ = "";
     std::string value_ = "";
     shannon::LogOpType optype_;
     uint64_t timestamp_;
-    std::string db_ = "";
-    std::string cf_ = "";
+    int32_t db_ = 0;
+    int32_t cf_ = 0;
 };
 
 class BinlogItem2 {
@@ -100,8 +100,8 @@ class PikaBinlogTransverter {
                                     shannon::Slice& value,
                                     shannon::LogOpType optype,
                                     uint64_t timestamp,
-                                    shannon::Slice& db_name,
-                                    shannon::Slice& cf_name);
+                                    int32_t db_index,
+                                    int32_t cf_index);
 
     static bool BinlogDecode(BinlogItem* binlog_item,
                              std::string& str);
@@ -110,8 +110,8 @@ class PikaBinlogTransverter {
                              std::string* value,
                              shannon::LogOpType* optype,
                              uint64_t* timestamp,
-                             std::string* db,
-                             std::string* cf,
+                             int32_t* db_index,
+                             int32_t* cf_index,
                              std::string& str);
 
     static std::string BinlogEncode(BinlogType type,
