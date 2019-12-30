@@ -11,6 +11,7 @@
 #include "swift/shannon_db.h"
 #include <mutex>
 #include <thread>
+#include <map>
 
 class PikaTrysyncThread : public pink::Thread {
  public:
@@ -29,7 +30,8 @@ class PikaTrysyncThread : public pink::Thread {
   int sockfd_;
   int64_t sid_;
   pink::PinkCli *cli_;
-
+  std::map<std::string, int> db_index_map_;
+  std::vector<std::string> SplitString(std::string&, char);
   void ReadSstToKV(shannon::DB* db,
                    std::vector<shannon::ColumnFamilyHandle*>& handles,
                    const std::string sst_name);

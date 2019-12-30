@@ -142,7 +142,7 @@ Status Binlog::Put(const BinlogItem& item) {
       db_->LogCmdDelete(key, item.db(), item.cf());
     break;
     case shannon::DB_CREATE:
-      db_->LogCmdCreateDB(item.db());
+      db_->LogCmdCreateDB(value.ToString(), item.db());
     break;
     case shannon::DB_DELETE:
       db_->LogCmdDeleteDB(item.db());

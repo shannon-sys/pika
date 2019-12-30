@@ -55,6 +55,7 @@ class TrysyncCmd : public Cmd {
   int64_t filenum_;
   int64_t pro_offset_;
   virtual void DoInitial(const PikaCmdArgsType &argvs, const CmdInfo* const ptr_info);
+  void StructDBMAPString(std::string& str);
 };
 
 class AuthCmd : public Cmd {

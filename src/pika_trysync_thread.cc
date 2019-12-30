@@ -72,6 +72,24 @@ bool PikaTrysyncThread::Send(std::string lip) {
   return true;
 }
 
+std::vector<std::string> PikaTrysyncThread::SplitString(std::string& str, char c) {
+  size_t start = 0, len = 0;
+  std::vector<std::string> ret;
+  for (size_t i = 0; i < str.length(); i ++) {
+    if (str[i] == c) {
+      ret.push_back(str.substr(start, len));
+      start = i + 1;
+      len = 0;
+    } else {
+      len ++;
+    }
+  }
+  if (start < str.length()) {
+    ret.push_back(str.substr(start, len));
+  }
+  return ret;
+}
+
 bool PikaTrysyncThread::RecvProc() {
   bool should_auth = g_pika_conf->masterauth() == "" ? false : true;
   bool is_authed = false;
@@ -85,8 +103,16 @@ bool PikaTrysyncThread::RecvProc() {
       LOG(WARNING) << "Connect master, Recv, error: " <<strerror(errno);
       return false;
     }
-
-    reply = argv[0];
+    std::vector<std::string> strs = SplitString(argv[0], ' ');
+    if (strs.size() % 2 == 0) {
+      LOG(WARNING) << "Auth with master error: "<< argv[0];
+      return false;
+    }
+    reply = strs[0];
+    for (size_t i = 1; i < strs.size(); i += 2) {
+      db_index_map_.insert(std::pair<std::string, int>(strs[i], atoi(strs[i+1].c_str())));
+    }
+    // Create db 
     LOG(WARNING) << "Reply from master after trysync: " << reply;
     if (!is_authed && should_auth) {
       if (kInnerReplOk != slash::StringToLower(reply)) {
@@ -110,6 +136,7 @@ bool PikaTrysyncThread::RecvProc() {
         // 1, Master do bgsave first.
         // 2, Master waiting for an existing bgsaving process
         // 3, Master do dbsyncing
+        g_pika_server->db()->CreateDatabaseByDBIndexMap(db_index_map_);
         LOG(INFO) << "Need wait to sync";
         g_pika_server->NeedWaitDBSync();
       } else {
@@ -207,11 +234,12 @@ bool PikaTrysyncThread::ReceiveFiles() {
 // 1, Check dbsync finished, got the new binlog offset
 // 2, Replace the old db
 // 3, Update master offset, and the PikaTrysyncThread cron will connect and do slaveof task with master
+
 bool PikaTrysyncThread::TryUpdateMasterOffset() {
   // Check dbsync finished
   // std::string info_path = g_pika_conf->db_sync_path() + kBgsaveInfoFile;
   std::string info_path = g_pika_conf->db_sync_path();
-
+  // g_pika_server->db()->CreateDatabaseByDBIndexMap(db_index_map_);
   ReceiveFiles();
   if (info_path.back() != '/') {
         info_path += "/";
@@ -272,7 +300,7 @@ bool PikaTrysyncThread::TryUpdateMasterOffset() {
   }
 
   // Update master offset
-  // g_pika_server->logger_->SetProducerStatus(filenum, offset);
+  g_pika_server->logger_->SetProducerStatus(offset);
 
   // If sender is the peer-master
   // need to update receive binlog info after rsync finished.
@@ -343,6 +371,7 @@ void* PikaTrysyncThread::ThreadMain() {
       for (retry_times = 0; retry_times < 5; retry_times++) {
         if (rsync->Connect(lip, g_pika_conf->port() + 3000, "").ok()) {
           LOG(INFO) << "rsync successfully started, address:" << lip << ":" << g_pika_conf->port() + 3000;
+           g_pika_server->db()->CreateDatabaseByDBIndexMap(db_index_map_);
           rsync->Close();
           delete rsync;
           break;

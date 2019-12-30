@@ -168,6 +168,10 @@ std::string PikaClientConn::DoCmd(const PikaCmdArgsType& argv,
     g_pika_server->RWLockReader();
   }
 
+  while ((g_pika_server->role() & PIKA_ROLE_SLAVE) &&
+       !g_pika_server->db()->IsAllDbOpen()) {
+    sleep(1);
+  }
   c_ptr->Do();
   if (g_pika_server->slave_num() > 0 && cinfo_ptr->is_write()) {
     // g_rate_limiter->Lock();

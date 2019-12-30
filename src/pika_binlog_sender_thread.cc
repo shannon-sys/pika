@@ -88,24 +88,10 @@ Status PikaBinlogSenderThread::Consume(std::string &scratch) {
 
     int32_t db_index = log_iter_->db();
     int32_t cf_index = log_iter_->cf();
-    shannon::DB* db = g_pika_server->logger_->db_->GetDBByIndex(db_index);
-    if (db == NULL) {
-      stringstream ss;
-      ss<<"db:"<<db_index<<" not exists";
-      return Status::IOError(ss.str());
-    }
-    shannon::Slice db_name(db->GetName());
-    const shannon::ColumnFamilyHandle* cf_handle = db->GetColumnFamilyHandle(cf_index);
-    if (cf_handle == NULL) {
-      stringstream ss;
-      ss<<"cf:"<<cf_index<<" not exists";
-      return Status::IOError(ss.str());
-    }
-    shannon::Slice cf_name(cf_handle->GetName());
     scratch = PikaBinlogTransverter::BinlogEncode(key, value, op_type,
                                                   timestamp,
-                                                  db_name,
-                                                  cf_name);
+                                                  db_index,
+                                                  cf_index);
     con_offset_ ++;
     cmd_size_ = key.size() + value.size();
   } else if (log_iter_->status().IsCorruption()) {
