@@ -21,6 +21,7 @@ class RateLimiter {
   void set(int threshold);
   void init();
   void init(int bucket_size);
+  int bucket_size();
   int tokens();
   void Lock();
   void UnLock();

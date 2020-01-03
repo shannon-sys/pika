@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
   InitCmdInfoTable();
 
   g_rate_limiter = new RateLimiter();
-  g_rate_limiter->init();
+  g_rate_limiter->init(g_pika_conf->binlog_file_size());
 
   LOG(INFO) << "Server at: " << path;
   g_pika_server = new PikaServer();

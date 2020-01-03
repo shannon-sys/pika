@@ -48,6 +48,10 @@ void RateLimiter::init(int bucket_size) {
   tokens_ = 0;
 }
 
+int RateLimiter::bucket_size() {
+  return bucket_size_;
+}
+
 int RateLimiter::tokens() {
   return tokens_;
 }
