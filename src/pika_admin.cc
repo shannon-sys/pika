@@ -11,6 +11,7 @@
 #include "include/pika_server.h"
 #include "include/build_version.h"
 #include "include/pika_version.h"
+#include "include/rate_limiter.h"
 
 #include <sys/utsname.h>
 #ifdef TCMALLOC_EXTENSION
@@ -19,6 +20,7 @@
 
 extern PikaServer *g_pika_server;
 extern PikaConf *g_pika_conf;
+extern RateLimiter *g_rate_limiter;
 
 void SlaveofCmd::DoInitial(const PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
   if (!ptr_info->CheckArg(argv.size())) {
@@ -564,6 +566,8 @@ void InfoCmd::Do() {
       info.append("\r\n");
       InfoCPU(info);
       info.append("\r\n");
+      InfoRatelimiterTokens(info);
+      info.append("\r\n");
       InfoReplication(info);
       info.append("\r\n");
       InfoKeyspace(info);
@@ -638,6 +642,15 @@ void InfoCmd::Do() {
   res_.AppendStringLen(info.size());
   res_.AppendContent(info);
   return;
+}
+
+void InfoCmd::InfoRatelimiterTokens(std::string &info) {
+  std::stringstream tmp_stream;
+  tmp_stream << "# Ratelimiter\r\n";
+  tmp_stream << "token:" << g_rate_limiter->tokens() << "\r\n";
+  tmp_stream << "bucket size:" << g_rate_limiter->bucket_size() << "\r\n";
+
+  info.append(tmp_stream.str());
 }
 
 void InfoCmd::InfoServer(std::string &info) {

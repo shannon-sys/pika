@@ -206,6 +206,7 @@ class InfoCmd : public Cmd {
     off_ = false;
   }
 
+  void InfoRatelimiterTokens(std::string &info);
   void InfoServer(std::string &info);
   void InfoClients(std::string &info);
   void InfoStats(std::string &info);
